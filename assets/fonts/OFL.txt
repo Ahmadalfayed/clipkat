@@ -1,0 +1,8 @@
+Cairo font (subset, variable weight 200–1000)
+Copyright 2009 The Cairo Project Authors (https://github.com/Gue3bara/Cairo)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+The license text is available with a FAQ at: https://openfontlicense.org (http://scripts.sil.org/OFL)
+
+The font was subset (Arabic + Latin ranges) and converted to WOFF2 for offline use in Maze Studio.
+It is embedded in css/font.css as base64.
