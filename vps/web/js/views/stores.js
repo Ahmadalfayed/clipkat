@@ -1,4 +1,5 @@
 import { api } from '../services/index.js';
+import { POLICY } from '../policy-text.js';
 import { t, fmtKWD, fmtNum, fmtDate } from '../i18n.js';
 import { PLANS, STORE_CATEGORIES } from '../config.js';
 import { icon, esc, $, $$, storeLogo, storeBanner, productImg, emptyState, verifiedBadge, logoMark } from '../ui.js';
@@ -33,7 +34,8 @@ async function marketplace(el, params, ctx) {
     <div class="chips" role="group" aria-label="${esc(t('category'))}"><button class="chip ${!cat ? 'on' : ''}" data-cat="">${esc(t('all'))}</button>${STORE_CATEGORIES.map((c) => `<button class="chip ${cat === c ? 'on' : ''}" data-cat="${c}" aria-pressed="${cat === c}">${esc(t('cat_' + c))}</button>`).join('')}</div>
     ${!q && !cat ? `<h2 class="sec-title">${icon('star', { size: 18, fill: true })} ${esc(t('featured'))}</h2><div class="hscroll">${featured.filter((s) => s.featured).map(storeCard).join('')}</div>` : ''}
     <h2 class="sec-title">${icon('store', { size: 18 })} ${esc(t('stores'))}</h2>
-    <div class="store-grid" id="storeGrid"></div></div>`;
+    <div class="store-grid" id="storeGrid"></div>
+    <p class="muted sm center policy-foot">كليب كات تؤجّر مساحات المتاجر فقط ولا تستلم أموال المشتريات · <a href="#/policy">سياسة تأجير المتاجر والتعاملات</a></p></div>`;
   const grid = $('#storeGrid', el), input = $('input', el);
   let curCat = cat;
   const draw = async () => { const list = await api.listStores({ q: input.value, category: curCat }); grid.innerHTML = list.map(storeCard).join('') || emptyState(t('noStores')); };
@@ -58,6 +60,7 @@ async function storePage(el, params, ctx) {
       ${s.contact ? `<a class="btn primary" href="${esc(s.contact)}" target="_blank" rel="noopener">${icon('comment', { size: 16 })} ${esc(t('buy'))}</a>` : ''}
     </section>
     ${s.description ? `<p class="sp-desc">${esc(s.description)}</p>` : ''}
+    ${`<p class="buyer-note" role="note">${esc(POLICY.buyerNotice)} <a href="#/policy">سياسة المتاجر</a></p>`}
     ${!status.active ? `<div class="warn">${icon('shield', { size: 18 })}<span>${esc(t('storeInactive'))}</span></div>` : ''}
     <h2 class="sec-title">${icon('bag', { size: 18 })} ${esc(t('productsTitle'))} <small class="muted">(${products.length})</small></h2>
     ${products.length ? `<div class="prod-grid">${products.map((p) => `<article class="prod-card"><img src="${productImg(p)}" alt="${esc(p.name)}" loading="lazy"><div class="pc-body"><h3>${esc(p.name)}</h3><div class="price">${esc(fmtKWD(p.price))}</div>
@@ -82,6 +85,7 @@ async function rentPage(el, params, ctx) {
   const full = slots.storesUsed >= slots.storesTotal && !myStore;
   el.innerHTML = `<div class="page">${pageHead(t('rentTitle'))}
     <p class="lead">${esc(t('rentSub'))}</p>
+    <div class="note" role="note">${icon('shield', { size: 18 })} كليب كات تؤجّرك مساحة المتجر فقط مقابل رسوم الإيجار المعروضة أدناه. أموال المشتريات تصلك مباشرة من المشترين، وكليب كات لا تستلمها ولا تأخذ عليها عمولة. <a href="#/policy">اقرأ سياسة تأجير المتاجر</a></div>
     ${myStore ? `<div class="note">${icon('store', { size: 18 })} ${esc(t('alreadyHaveStore'))} <a href="#/dashboard">${esc(t('dashboard'))}</a></div>` : ''}
     <div class="slots inline"><span>${icon('store', { size: 16 })} ${esc(t('slotsAvail'))}: <b>${slots.storesTotal - slots.storesUsed}</b> ${esc(t('of'))} ${slots.storesTotal}</span><span>${icon('star', { size: 16 })} ${esc(t('featuredAvail'))}: <b>${slots.featuredTotal - slots.featuredUsed}</b> ${esc(t('of'))} ${slots.featuredTotal}</span></div>
     <div class="plans">${PLANS.map((p) => `<article class="plan ${p.popular ? 'popular' : ''}" data-plan="${p.id}">

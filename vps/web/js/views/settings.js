@@ -31,6 +31,7 @@ export async function render(el, params, ctx) {
         <button class="btn primary" type="submit">${esc(t('changePassword'))}</button></form>
       <button class="btn ghost block" id="logoutAll">${icon('logout', { size: 16 })} ${esc(t('logoutAll'))}</button>
     </section>
+    <section class="card set-sec"><a class="set-row link" href="#/policy">${icon('store', { size: 18 })}<span class="grow"><b>سياسة تأجير المتاجر والتعاملات</b><small class="muted">كليب كات تؤجّر المتاجر فقط ولا تستلم أموال المشتريات</small></span>${icon('back', { size: 16, cls: 'flip-ltr' })}</a></section>
     <section class="card set-sec soon"><h2>${esc(t('secSoon'))}</h2><p class="muted">${esc(t('soonList'))}</p></section>
     <p class="muted center sm">© 2026 وطن النهار</p>
   </div>`;

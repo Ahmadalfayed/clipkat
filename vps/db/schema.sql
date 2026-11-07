@@ -226,3 +226,18 @@ create or replace view trending_tags as
   where not v.is_hidden
     and exists (select 1 from profiles tp where tp.id = v.user_id and not tp.is_private and not tp.is_banned)
   group by tag order by count(*) desc, tag;
+
+-- =====================================================================
+--  سياسة تأجير المتاجر: تسجيل قبول التاجر لإصدار محدد (إضافة فقط)
+-- =====================================================================
+create table if not exists policy_acceptances (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  policy text not null check (policy in ('store-rental')),
+  version text not null check (char_length(version) between 1 and 60),
+  store_id uuid references stores(id) on delete set null,
+  rental_id uuid references rentals(id) on delete set null,
+  accepted_at timestamptz not null default now()
+);
+create index if not exists policy_acceptances_user_idx on policy_acceptances (user_id, accepted_at desc);
+alter table rentals add column if not exists policy_version text;

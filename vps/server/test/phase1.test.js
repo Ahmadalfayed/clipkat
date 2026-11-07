@@ -193,3 +193,39 @@ test('reports: submission rules and admin-only review', async () => {
   assert.equal((await o.get('/auth/me')).body.user, null);                    // المحظور خرج من جلساته
   assert.equal((await admin.get('/admin/reports?status=open')).body.reports.length, 0);
 });
+
+// ===== سياسة تأجير المتاجر =====
+test('store rental requires accepting the current policy version and records it server-side', async () => {
+  const m = await user('policy_merchant');
+  const ver = (await m.get('/policy/store-rental')).body.version;
+  assert.match(ver, /^store-rental-/);
+  assert.equal((await m.get('/config')).body.storePolicyVersion, ver);
+  const web = fs.readFileSync(path.join(here, '../../web/js/policy-text.js'), 'utf8');
+  assert.ok(web.includes(`"version": "${ver}"`), 'web policy version must match server');
+  const store = { name: 'متجر اختبار', category: 'other' };
+  assert.equal((await m.post('/stores', { store, planId: 'weekly' })).body.error, 'policyRequired');
+  assert.equal((await m.post('/stores', { store, planId: 'weekly', acceptPolicy: 'old-version' })).status, 400);
+  const created = await m.post('/stores', { store, planId: 'weekly', acceptPolicy: ver });
+  assert.equal(created.status, 201);
+  assert.equal((await m.post(`/stores/${created.body.id}/rentals`, { planId: 'weekly' })).status, 400);
+  assert.equal((await m.post(`/stores/${created.body.id}/rentals`, { planId: 'weekly', acceptPolicy: ver })).status, 201);
+  const cl = new pg.Client({ connectionString: DB }); await cl.connect();
+  try {
+    const acc = (await cl.query("select version, store_id, rental_id from policy_acceptances where user_id = $1 and policy = 'store-rental'", [m.me.id])).rows;
+    assert.equal(acc.length, 2); assert.ok(acc.every((a) => a.version === ver && a.store_id === created.body.id && a.rental_id));
+    const rents = (await cl.query('select policy_version from rentals where owner_id = $1', [m.me.id])).rows;
+    assert.ok(rents.length === 2 && rents.every((r) => r.policy_version === ver));
+  } finally { await cl.end(); }
+  // لا يوجد مسار دفع لمشتريات المنتجات في الخادم
+  assert.equal((await m.post('/payments/checkout', {})).status, 404);
+  assert.equal((await m.post('/orders', {})).status, 404);
+});
+
+test('policy page and links are served', async () => {
+  const root = BASE.replace(/\/api$/, '');
+  for (const p of ['/js/views/policy.js', '/js/policy-text.js']) assert.equal((await fetch(root + p)).status, 200, p);
+  const app = await (await fetch(root + '/js/app.js')).text(); assert.ok(app.includes("policy: () => import('./views/policy.js')"));
+  const text = await (await fetch(root + '/js/policy-text.js')).text();
+  assert.ok(text.includes('لا تستلم أموال المشتريات'));
+  for (const v of ['stores.js', 'checkout.js', 'settings.js', 'feed.js']) assert.ok((await (await fetch(root + '/js/views/' + v)).text()).includes('#/policy'), v);
+});

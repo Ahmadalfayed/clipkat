@@ -7,6 +7,7 @@ import { q, tx, pool } from './db.js';
 import { loadUser, requireUser, requireAdmin, setSession, clearSession } from './auth.js';
 import { HttpError, bad, isUuid, str, hashPassword, verifyPassword, safeEqual, normTags, localUrl, norm, ms } from './util.js';
 import { PROFILE_COLS, VIDEO_COLS, mapProfile, mapVideo, mapStore, mapProduct, mapRental, mapNotif, mapComment } from './mappers.js';
+import { STORE_POLICY_VERSION } from './policy.js';
 import { visibleSql, notBlockedSql, isBlockedBetween, canSeeUserContent, COMMENT_POLICIES, REPORT_REASONS } from './privacy.js';
 import { imageUpload, videoUpload, sniffImage, sniffVideo, place, rm, rid, makePoster, dirs } from './uploads.js';
 import { activateRental, cancelRental, slots, notify } from './rentals.js';
@@ -23,7 +24,11 @@ export function buildRouter() {
   r.use(loadUser);
 
   r.get('/health', h(async (_q, res) => { await q('select 1'); res.json({ ok: true }); }));
-  r.get('/config', (_req, res) => res.json({ maxVideoMb: config.maxVideoMb, maxImageMb: config.maxImageMb }));
+  r.get('/config', (_req, res) => res.json({ maxVideoMb: config.maxVideoMb, maxImageMb: config.maxImageMb, storePolicyVersion: STORE_POLICY_VERSION }));
+  r.get('/policy/store-rental', (_req, res) => res.json({ policy: 'store-rental', version: STORE_POLICY_VERSION }));
+  // لا إيجار بدون قبول صريح لإصدار السياسة الحالي — يُسجَّل في نفس المعاملة
+  const requirePolicy = (b) => { if (b?.acceptPolicy !== STORE_POLICY_VERSION) throw bad('policyRequired'); };
+  const recordAcceptance = (c, userId, storeId, rentalId) => c.query("insert into policy_acceptances (user_id, policy, version, store_id, rental_id) values ($1,'store-rental',$2,$3,$4)", [userId, STORE_POLICY_VERSION, storeId, rentalId]);
 
   // ---------------- Auth ----------------
   const authLimit = mkLimit(15 * 60000, config.rateAuthMax);
@@ -350,23 +355,27 @@ export function buildRouter() {
     logo: localUrl(b.logo), banner: plan && !plan.custom_banner ? null : localUrl(b.banner)
   });
   r.post('/stores', requireUser, h(async (req, res) => {
-    const { store = {}, planId, payment = {} } = req.body || {};
+    const { store = {}, planId, payment = {} } = req.body || {}; requirePolicy(req.body);
     const plan = need((await q('select * from plans where id = $1', [String(planId)])).rows[0]);
     const f = storeFields(store, plan);
     if ((await q('select 1 from stores where owner_id = $1', [req.user.id])).rowCount) throw new HttpError(409, 'exists');
     const out = await tx(async (c) => {
       const s = (await c.query('insert into stores (owner_id, name, category, description, contact_url, logo_url, banner_url, plan_id) values ($1,$2,$3,$4,$5,$6,$7,$8) returning *', [req.user.id, f.name, f.category, f.description, f.contact, f.logo, f.banner, plan.id])).rows[0];
       // الإيجار يبقى pending — السعر يُحسب من الخادم، والتفعيل فقط من المشرف أو Webhook الدفع
-      await c.query('insert into rentals (store_id, owner_id, plan_id, amount, method, gateway, gateway_ref) values ($1,$2,$3,$4,$5,$6,$7)', [s.id, req.user.id, plan.id, plan.price, ['knet', 'card', 'applepay'].includes(payment.method) ? payment.method : null, 'mock', String(payment.ref || '').slice(0, 60) || null]);
+      const rt = (await c.query('insert into rentals (store_id, owner_id, plan_id, amount, method, gateway, gateway_ref, policy_version) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id', [s.id, req.user.id, plan.id, plan.price, ['knet', 'card', 'applepay'].includes(payment.method) ? payment.method : null, 'mock', String(payment.ref || '').slice(0, 60) || null, STORE_POLICY_VERSION])).rows[0];
+      await recordAcceptance(c, req.user.id, s.id, rt.id);
       return s;
     });
     res.status(201).json({ ...mapStore(out), pending: true });
   }));
   r.post('/stores/:id/rentals', requireUser, h(async (req, res) => {
-    const id = uid(req.params.id); const { planId, payment = {} } = req.body || {};
+    const id = uid(req.params.id); const { planId, payment = {} } = req.body || {}; requirePolicy(req.body);
     const st = need((await q('select * from stores where id = $1 and owner_id = $2', [id, req.user.id])).rows[0]);
     const plan = need((await q('select * from plans where id = $1', [String(planId)])).rows[0]);
-    await q('insert into rentals (store_id, owner_id, plan_id, amount, method, gateway, gateway_ref) values ($1,$2,$3,$4,$5,$6,$7)', [st.id, req.user.id, plan.id, plan.price, ['knet', 'card', 'applepay'].includes(payment.method) ? payment.method : null, 'mock', String(payment.ref || '').slice(0, 60) || null]);
+    await tx(async (c) => {
+      const rt = (await c.query('insert into rentals (store_id, owner_id, plan_id, amount, method, gateway, gateway_ref, policy_version) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id', [st.id, req.user.id, plan.id, plan.price, ['knet', 'card', 'applepay'].includes(payment.method) ? payment.method : null, 'mock', String(payment.ref || '').slice(0, 60) || null, STORE_POLICY_VERSION])).rows[0];
+      await recordAcceptance(c, req.user.id, st.id, rt.id);
+    });
     res.status(201).json(await withPending(mapStore(st), req.user));
   }));
   r.patch('/stores/:id', requireUser, h(async (req, res) => {
@@ -489,6 +498,7 @@ export function buildRouter() {
   r.post('/admin/rentals/:id/cancel', requireAdmin, h(async (req, res) => { await cancelRental(uid(req.params.id)); res.json({ ok: true }); }));
 
   // ---------------- Payment webhook (هيكل أولي — أكمله لاحقاً) ----------------
+  // خاص برسوم إيجار المتاجر فقط. كليب كات لا تستلم أموال مشتريات المنتجات (تُدفع مباشرة للتاجر)
   // ⚠️ TODO قبل الإنتاج: استبدل التحقق البسيط أدناه بتحقق Tap (hashstring HMAC + إعادة جلب الشحنة GET /v2/charges/:id)
   // أو MyFatoorah (توقيع Webhook + GetPaymentStatus)، وطابق المبلغ مع الإيجار. راجع server/README.md
   r.post('/payment-webhook/:gateway', h(async (req, res) => {

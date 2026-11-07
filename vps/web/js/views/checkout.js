@@ -4,6 +4,7 @@ import { t, fmtKWD, fmtDate } from '../i18n.js';
 import { PLANS, STORE_CATEGORIES } from '../config.js';
 import { icon, esc, $, toast, fileToDataURL, emptyState } from '../ui.js';
 import { pageHead } from './common.js';
+import { POLICY } from '../policy-text.js';
 import { planFeatures } from './stores.js';
 
 const METHOD_ICONS = {
@@ -40,6 +41,8 @@ export async function render(el, params, ctx) {
       <section class="card"><h2>${esc(t('payMethod'))}</h2>
         <div class="methods" role="radiogroup" aria-label="${esc(t('payMethod'))}">${PAYMENT_METHODS.map((m, i) => `<label class="method"><input type="radio" name="method" value="${m}" ${i === 0 ? 'checked' : ''}>${METHOD_ICONS[m]}<span>${esc(t(m))}</span></label>`).join('')}</div>
       </section>
+      <section class="card policy-accept"><p class="note">كليب كات تؤجّرك مساحة المتجر فقط. أموال مشترياتك تصل لك مباشرة من المشترين، والبيع والتوصيل والإرجاع والفواتير مسؤوليتك أمامهم.</p>
+        <label class="radio-row"><input type="checkbox" name="acceptPolicy" value="${esc(POLICY.version)}" required> <span>قرأت وأوافق على <a href="#/policy" target="_blank" rel="noopener">سياسة تأجير المتاجر</a> (الإصدار ${esc(POLICY.version)})</span></label></section>
       <p class="form-err" role="alert"></p>
       <button class="btn primary block lg" type="submit" id="payBtn">${esc(t('payDemo', { amount: fmtKWD(plan.price) }))}</button>
     </form></div>`;
@@ -47,6 +50,7 @@ export async function render(el, params, ctx) {
   $('#bannerFile', el)?.addEventListener('change', async (e) => { if (e.target.files[0]) banner = await fileToDataURL(e.target.files[0], 1000); });
   $('#coForm', el).addEventListener('submit', async (e) => {
     e.preventDefault(); const fd = new FormData(e.target); const err = $('.form-err', el); err.textContent = '';
+    if (fd.get('acceptPolicy') !== POLICY.version) { err.textContent = 'يجب الموافقة على سياسة تأجير المتاجر أولاً'; $('input[name=acceptPolicy]', el).focus(); return; }
     if (!renew && !String(fd.get('name') || '').trim()) { err.textContent = t('fillAll'); $('input[name=name]', el).focus(); return; }
     const btn = $('#payBtn', el); btn.disabled = true; btn.innerHTML = `<span class="spinner sm"></span> ${esc(t('processing'))}`;
     try {
@@ -55,6 +59,6 @@ export async function render(el, params, ctx) {
       if (renew) await api.renewRental({ storeId: store.id, planId: plan.id, payment });
       else await api.createStoreWithRental({ planId: plan.id, payment, store: { name: fd.get('name'), category: fd.get('category'), description: fd.get('description'), contact: fd.get('contact'), logo, banner } });
       toast(api.mode !== 'local' ? t('rentalPending') : t('paySuccess', { ref: payment.ref }), 'ok'); await ctx.refreshMe(); ctx.navigate('#/dashboard');
-    } catch (ex) { console.warn(ex); err.textContent = ex.message === 'full' ? t('soldOut') : ex.message; btn.disabled = false; btn.textContent = t('payDemo', { amount: fmtKWD(plan.price) }); }
+    } catch (ex) { console.warn(ex); err.textContent = ex.message === 'full' ? t('soldOut') : ex.message === 'policyRequired' ? 'يجب الموافقة على سياسة تأجير المتاجر أولاً' : ex.message; btn.disabled = false; btn.textContent = t('payDemo', { amount: fmtKWD(plan.price) }); }
   });
 }

@@ -3,6 +3,7 @@ import { t, fmtNum, fmtKWD, timeAgo, lang } from '../i18n.js';
 import { icon, esc, $, $$, toast, openSheet, avatarOf, productImg, emptyState, verifiedBadge } from '../ui.js';
 import { prefsButtons, brandHTML } from '../app.js';
 import { openReportSheet, confirmBlock } from './common.js';
+import { POLICY } from '../policy-text.js';
 
 let muted = true; // يبدأ صامتاً (سياسة التشغيل التلقائي في المتصفحات)
 
@@ -187,6 +188,7 @@ export async function render(el, params, ctx) {
   async function openProducts(s) {
     const st = s.store;
     const body = `<ul class="prod-list">${s.products.map((p) => `<li class="prod-row"><img src="${productImg(p)}" alt="" class="pimg"><div class="grow"><b>${esc(p.name)}</b><div class="price">${esc(fmtKWD(p.price))}</div><div class="muted sm">${p.stock > 0 ? esc(t('inStock', { n: p.stock })) : `<span class="bad">${esc(t('outOfStock'))}</span>`}</div></div>${st?.contact && p.stock > 0 ? `<a class="btn primary sm" href="${esc(st.contact)}" target="_blank" rel="noopener">${esc(t('buy'))}</a>` : ''}</li>`).join('')}</ul>
+      <p class="buyer-note" role="note">${esc(POLICY.buyerNotice)} <a href="#/policy" data-close>سياسة المتاجر</a></p>
       ${st ? `<a class="btn ghost block" href="#/store/${st.id}" data-close>${icon('store', { size: 18 })} ${esc(t('visitStore'))}: ${esc(st.name)}</a>` : ''}`;
     openSheet({ title: t('taggedProducts'), body });
   }

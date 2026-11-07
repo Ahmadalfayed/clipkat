@@ -2,6 +2,7 @@
 // يُحمَّل تلقائياً عندما يستجيب /api/health (انظر js/services/index.js).
 // الأمان الحقيقي في الخادم (server/src) وليس هنا: المتصفح لا يستطيع تفعيل إيجار ولا ترقية نفسه.
 import { PLANS, SLOTS, MAX_VIDEO_MB } from '../config.js';
+import { POLICY } from '../policy-text.js';
 
 const DAY = 86400000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -184,9 +185,9 @@ export class ApiAdapter {
     await this._meOrThrow(); const plan = PLANS.find((p) => p.id === planId);
     const body = { name: store.name, category: store.category, description: store.description, contact: store.contact || '', logo: await this._img(store.logo), banner: plan?.banner ? await this._img(store.banner) : null };
     // الإيجار يبقى pending — التفعيل من المشرف أو Webhook الدفع فقط
-    return this._req('POST', '/stores', { store: body, planId, payment: { method: payment?.method, ref: payment?.ref } });
+    return this._req('POST', '/stores', { store: body, planId, payment: { method: payment?.method, ref: payment?.ref }, acceptPolicy: POLICY.version });
   }
-  async renewRental({ storeId, planId, payment }) { await this._meOrThrow(); return this._req('POST', `/stores/${storeId}/rentals`, { planId, payment: { method: payment?.method, ref: payment?.ref } }); }
+  async renewRental({ storeId, planId, payment }) { await this._meOrThrow(); return this._req('POST', `/stores/${storeId}/rentals`, { planId, payment: { method: payment?.method, ref: payment?.ref }, acceptPolicy: POLICY.version }); }
   async updateStore(id, patch) {
     const body = { name: patch.name, category: patch.category, description: patch.description, contact: patch.contact };
     if (patch.logo) body.logo = await this._img(patch.logo); if (patch.banner) body.banner = await this._img(patch.banner);
