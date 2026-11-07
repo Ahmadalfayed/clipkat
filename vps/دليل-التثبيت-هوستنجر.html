@@ -1,0 +1,245 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>دليل تشغيل كليب كات على Hostinger VPS</title>
+<style>
+@font-face{font-family:Cairo;src:url('web/assets/fonts/Cairo-Variable.woff2') format('woff2');font-weight:200 1000}
+body{font-family:Cairo,system-ui,sans-serif;max-width:820px;margin:0 auto;padding:24px 18px 60px;line-height:1.85;color:#10162b;background:#f7f5f0;font-size:16.5px}
+h1{font-size:26px;color:#0e7c86}
+h2{margin-top:34px;padding:8px 14px;border-radius:12px;background:#fff;border-inline-start:5px solid #12c2a0;font-size:19px}
+blockquote{margin:14px 0;padding:10px 16px;background:#fff7e6;border:1px solid #f5a524;border-radius:12px}
+code{background:#eef2f7;padding:1px 6px;border-radius:6px;direction:ltr;unicode-bidi:isolate;font-size:14px}
+pre{background:#0b1020;color:#e8fff8;padding:14px;border-radius:12px;overflow-x:auto;direction:ltr;text-align:left}
+pre code{background:none;color:inherit}
+table{border-collapse:collapse;width:100%;background:#fff;margin:10px 0}
+th,td{border:1px solid #e3e0d8;padding:8px 10px;text-align:start;vertical-align:top} th{background:#eaf8f4}
+li{margin:4px 0} li.task,ul:has(> li > input){list-style:none} hr{border:0;border-top:1px dashed #ccc;margin:26px 0}
+</style></head><body><h1>دليل تشغيل «كليب كات» على سيرفر Hostinger VPS — خطوة بخطوة</h1>
+<p>هذا الدليل لمن لا يملك خبرة تقنية. ستحتاج حوالي <strong>30 دقيقة</strong>. في النهاية يصبح لديك موقع كليب كات على سيرفرك أنت: تسجيل دخول حقيقي، رفع مقاطع، متاجر، ولوحة مشرف.</p>
+<blockquote>
+<p>🔒 <strong>قاعدة ذهبية:</strong> لا ترسل كلمة مرور السيرفر أو ملف <code>.env</code> لأي شخص أو موقع.</p>
+</blockquote>
+<h2>ما الذي تحتاجه؟</h2>
+<table>
+<thead>
+<tr>
+<th>الشيء</th>
+<th>ملاحظة</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>سيرفر Hostinger VPS</td>
+<td>الأفضل <strong>KVM 2</strong> (انظر «الحجم المناسب» أسفل الدليل)</td>
+</tr>
+<tr>
+<td>ملف <code>clipkat-vps.zip</code></td>
+<td>الحزمة التي استلمتها</td>
+</tr>
+<tr>
+<td>نطاق (دومين)</td>
+<td>اختياري للتجربة، <strong>مهم جداً</strong> للاستخدام الحقيقي (لتشفير HTTPS وحماية كلمات المرور)</td>
+</tr>
+<tr>
+<td>جهاز كمبيوتر ويندوز / ماك</td>
+<td>لرفع الملف</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>الخطوة 1 — جهّز السيرفر في Hostinger</h2>
+<ol>
+<li>ادخل إلى <strong>hPanel</strong> ← قسم <strong>VPS</strong> ← اضغط <strong>Manage</strong> (إدارة) على السيرفر.</li>
+<li>إن كنت تنشئ سيرفراً جديداً أو تعيد تثبيته: اختر نظام التشغيل <strong>Ubuntu 24.04</strong> وهو النظام العادي (<strong>Plain OS</strong>).
+⚠️ <strong>لا تختر</strong> قوالب فيها برامج جاهزة (لوحات تحكم، WordPress، Docker جاهز…). نحتاج Ubuntu نظيفاً فقط — السكربت يثبّت Docker بنفسه.</li>
+<li>اكتب <strong>كلمة مرور root</strong> قوية واحفظها.</li>
+<li>من صفحة <strong>Overview</strong> (نظرة عامة) انسخ <strong>عنوان IP</strong> للسيرفر (أرقام مثل <code>123.45.67.89</code>). سنسميه <strong>IP</strong> في بقية الدليل.</li>
+</ol>
+<h2>الخطوة 2 — افتح الطرفية (Terminal)</h2>
+<p>الأسهل: في صفحة السيرفر اضغط الزر <strong>Browser terminal</strong> (طرفية المتصفح) أعلى الصفحة. تفتح شاشة سوداء تكتب فيها الأوامر.</p>
+<p>(بديل: من ويندوز افتح <strong>PowerShell</strong> واكتب <code>ssh root@IP</code> ثم كلمة المرور.)</p>
+<blockquote>
+<p>💡 لصق الأوامر: انسخ السطر ثم الصقه في الطرفية (كليك يمين أو Ctrl+Shift+V) ثم اضغط <strong>Enter</strong>.</p>
+</blockquote>
+<h2>الخطوة 3 — ارفع ملف الحزمة إلى السيرفر</h2>
+<p>افتح <strong>PowerShell</strong> على جهازك (ليس طرفية السيرفر) في المجلد الذي فيه <code>clipkat-vps.zip</code> ونفّذ (غيّر <code>IP</code>):</p>
+<pre><code>scp clipkat-vps.zip root@IP:/root/
+</code></pre>
+<p>اكتب <code>yes</code> إن سُئلت، ثم كلمة مرور السيرفر. (برنامج <strong>WinSCP</strong> أو <strong>FileZilla</strong> يفي بالغرض أيضاً: اسحب الملف إلى مجلد <code>/root</code>.)</p>
+<p><strong>بديل:</strong> إن رفعت الملف إلى رابط تحميل مباشر، نفّذ في طرفية السيرفر: <code>wget -O clipkat-vps.zip &quot;الرابط&quot;</code></p>
+<h2>الخطوة 4 — (اختياري لكن موصى به) اربط النطاق بالسيرفر</h2>
+<p>اجعل هذه الخطوة <strong>قبل</strong> التثبيت حتى يعمل HTTPS من أول مرة.</p>
+<ol>
+<li>في hPanel ← <strong>Domains</strong> ← اختر نطاقك ← <strong>DNS / Nameservers</strong> ← <strong>DNS records</strong>.</li>
+<li>أضف سجلاً جديداً:</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Name</th>
+<th>Points to</th>
+<th>TTL</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>A</strong></td>
+<td><code>@</code> (أو اسم فرعي مثل <code>clip</code>)</td>
+<td><strong>IP</strong> السيرفر</td>
+<td>300</td>
+</tr>
+</tbody></table>
+<ol start="3">
+<li>احذف أي سجل <strong>A</strong> قديم لنفس الاسم (صفحة «قيد الإنشاء» التي تضعها الشركة) وأي سجل <strong>AAAA</strong>.</li>
+<li>انتظر 5–30 دقيقة. إن لم يكن لديك نطاق الآن فتجاوز هذه الخطوة، وسيعمل الموقع على <code>http://IP</code> (بدون تشفير — للتجربة فقط).</li>
+</ol>
+<h2>الخطوة 5 — ثبّت (أمر واحد)</h2>
+<p>في طرفية السيرفر اكتب الأوامر التالية سطراً بسطر:</p>
+<pre><code>apt-get update &amp;&amp; apt-get install -y unzip
+unzip clipkat-vps.zip
+cd clipkat-vps
+bash install.sh
+</code></pre>
+<p>سيسألك السكربت:</p>
+<ol>
+<li><strong>اسم النطاق</strong> — اكتب مثل <code>clip.example.com</code> أو اتركه فارغاً (للعمل على IP).</li>
+<li><strong>بريد المشرف</strong> — بريدك، وبه ستدخل إلى لوحة الإدارة.</li>
+<li><strong>بريد شهادة HTTPS</strong> — يقترح بريد المشرف؛ اضغط Enter.</li>
+<li><strong>كلمة مرور المشرف</strong> — اكتب كلمة قوية (8 أحرف فأكثر)، أو اتركها فارغة وسيولّد السكربت واحدة ويطبعها لك. <strong>احفظها فوراً.</strong></li>
+</ol>
+<p>ثم يعمل وحده: يثبّت Docker، يولّد كلمات سر عشوائية، يشغّل الموقع، يفعّل الجدار الناري (المنافذ 22 و80 و443 فقط) ويجهّز <strong>نسخاً احتياطية يومية</strong>. يستغرق <strong>5–10 دقائق</strong>.</p>
+<p>في النهاية تظهر رسالة فيها ✅ والرابط النهائي، مثل: <code>https://clip.example.com</code></p>
+<h2>الخطوة 6 — جرّب الموقع</h2>
+<ol>
+<li>افتح الرابط في المتصفح (إن كان النطاق جديداً وظهر تحذير شهادة فانتظر دقائق وأعد المحاولة).</li>
+<li>اضغط <strong>دخول</strong> وادخل ببريد المشرف وكلمة مروره ← يظهر زر <strong>لوحة الإدارة</strong> في ملفك الشخصي.</li>
+<li>أنشئ حساباً عادياً آخر (من نافذة خفية) وجرّب: <strong>رفع مقطع</strong>، <strong>إعجاب</strong>، <strong>تعليق</strong>، <strong>متابعة</strong>.</li>
+<li>جرّب <strong>تأجير متجر</strong> بحساب عادي: بعد «الدفع» التجريبي تظهر الحالة <strong>«قيد الانتظار»</strong> ← هذا طبيعي.</li>
+<li>ادخل بحساب المشرف ← <strong>لوحة الإدارة</strong> ← اضغط <strong>تفعيل</strong> بجانب الإيجار ← يصبح المتجر نشطاً ويظهر في صفحة المتاجر.</li>
+</ol>
+<blockquote>
+<p>ℹ️ <strong>لماذا الإيجار «قيد الانتظار»؟</strong> لأن التفعيل التلقائي يجب أن يأتي من بوابة الدفع الحقيقية (Tap أو MyFatoorah)، وهذا الربط <strong>لم يكتمل بعد</strong> (هيكل أولي موجود). المتصفح لا يستطيع تفعيل أي إيجار — فقط المشرف. فعّل الإيجارات يدوياً بعد أن تستلم المبلغ بنفسك حتى يُربط الدفع.</p>
+</blockquote>
+<h2>إضافة مشرف آخر</h2>
+<p>اكتب في الطرفية (من داخل مجلد <code>clipkat-vps</code>)، بعد أن يسجّل ذلك الشخص حساباً:</p>
+<pre><code>cd /root/clipkat-vps
+docker compose exec db psql -U clipkat -d clipkat -c &quot;update profiles set is_admin=true where lower(email)=lower(&#39;البريد@example.com&#39;)&quot;
+</code></pre>
+<h2>نسيت كلمة المرور؟</h2>
+<p>لا يوجد إرسال بريد في هذه النسخة (لا «نسيت كلمة المرور» تلقائي). المشرف يغيّرها من الطرفية:</p>
+<pre><code>cd /root/clipkat-vps
+docker compose exec app node server/src/cli-reset-password.js البريد@example.com &#39;كلمة-جديدة-قوية&#39;
+</code></pre>
+<hr>
+<h2>النسخ الاحتياطي (مهم)</h2>
+<ul>
+<li><strong>تلقائي:</strong> كل يوم 03:30 فجراً تُحفظ نسخة (قاعدة البيانات + المقاطع والصور) في مجلد <code>/root/clipkat-vps/backups</code> ويُحتفظ بآخر 14 يوماً.</li>
+<li><strong>يدوي الآن:</strong> <code>cd /root/clipkat-vps &amp;&amp; ./backup.sh</code></li>
+<li><strong>حمّل نسخة إلى جهازك</strong> من وقت لآخر (من PowerShell على جهازك):
+<code>scp -r root@IP:/root/clipkat-vps/backups .</code>
+(النسخ على نفس السيرفر لا تحميك إن تعطّل السيرفر نفسه. Hostinger توفّر أيضاً نسخاً أسبوعية من لوحتها — فعّلها.)</li>
+<li><strong>استرجاع:</strong> <code>cd /root/clipkat-vps &amp;&amp; ./restore.sh backups/clipkat-التاريخ</code> ثم اكتب <code>YES</code>.
+⚠️ يستبدل كل بيانات الموقع الحالية بالنسخة.</li>
+</ul>
+<h2>التحديث</h2>
+<p>عندما تستلم حزمة جديدة: ارفعها إلى السيرفر ثم:</p>
+<pre><code>cd /root/clipkat-vps
+./update.sh /root/clipkat-vps-جديد.zip
+</code></pre>
+<p>يأخذ نسخة احتياطية أولاً ويحافظ على بياناتك وإعداداتك.</p>
+<h2>أوامر مفيدة</h2>
+<table>
+<thead>
+<tr>
+<th>ماذا</th>
+<th>الأمر (من داخل <code>/root/clipkat-vps</code>)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>حالة الخدمات</td>
+<td><code>docker compose ps</code></td>
+</tr>
+<tr>
+<td>سجلات التطبيق</td>
+<td><code>docker compose logs --tail=100 app</code></td>
+</tr>
+<tr>
+<td>إعادة التشغيل</td>
+<td><code>docker compose restart</code></td>
+</tr>
+<tr>
+<td>تغيير حد حجم الفيديو</td>
+<td>عدّل <code>MAX_VIDEO_MB</code> في <code>.env</code> (<code>nano .env</code>) ثم <code>docker compose up -d</code></td>
+</tr>
+</tbody></table>
+<hr>
+<h2>حل المشاكل</h2>
+<table>
+<thead>
+<tr>
+<th>المشكلة</th>
+<th>الحل</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>الموقع لا يفتح على IP</td>
+<td>في hPanel ← VPS ← <strong>Security / Firewall</strong>: إن كان جدار Hostinger مفعّلاً، افتح المنافذ <strong>22 و80 و443</strong>.</td>
+</tr>
+<tr>
+<td>HTTPS لا يعمل / تحذير شهادة</td>
+<td>تأكد أن سجل <strong>A</strong> يشير إلى IP الصحيح (وحذف سجل AAAA)، وانتظر 10–30 دقيقة. افحص: <code>docker compose logs caddy</code></td>
+</tr>
+<tr>
+<td>يظهر الموقع بوضع «نسخة تجريبية» محلي</td>
+<td>التطبيق لا يعمل: <code>docker compose ps</code> ثم <code>docker compose logs app</code></td>
+</tr>
+<tr>
+<td>«محاولات كثيرة» عند الدخول</td>
+<td>حماية تلقائية: انتظر 15 دقيقة.</td>
+</tr>
+<tr>
+<td>رفع الفيديو يفشل «كبير جداً»</td>
+<td>الحد الافتراضي 100MB؛ ارفعه من <code>.env</code> (انظر الأعلى) أو اضغط الفيديو قبل الرفع.</td>
+</tr>
+<tr>
+<td>امتلأ القرص</td>
+<td><code>df -h</code> — احذف نسخاً قديمة من <code>backups/</code> أو رقِّ السيرفر.</td>
+</tr>
+<tr>
+<td>أخطأت أثناء التثبيت</td>
+<td>يمكنك تشغيل <code>bash install.sh</code> مرة أخرى بأمان؛ لا يغيّر الأسرار ولا يحذف بياناتك.</td>
+</tr>
+</tbody></table>
+<h2>ملاحظات مهمة</h2>
+<ul>
+<li><strong>نظام التشغيل:</strong> Ubuntu 24.04 عادي (Plain OS). <strong>المنافذ المفتوحة:</strong> 22 (للدخول) و80 و443 (للموقع) فقط، وقاعدة البيانات غير مكشوفة للإنترنت.</li>
+<li><strong>بدون نطاق = بدون تشفير:</strong> كلمات المرور تُرسَل بلا HTTPS. استخدم نطاقاً للإنتاج.</li>
+<li><strong>الدفع تجريبي:</strong> لا يُخصم أي مبلغ. الربط الحقيقي مع Tap/MyFatoorah لم يكتمل.</li>
+<li><strong>لا يوجد بريد إلكتروني:</strong> لا تأكيد بريد ولا «نسيت كلمة المرور» (انظر أعلاه).</li>
+<li><strong>الفيديو الطويل والزوار الكثيرين:</strong> المقاطع تُخدم من قرص السيرفر نفسه وتستهلك سرعة الشبكة. عند نمو الموقع، الخطوة التالية هي نقل الفيديو إلى <strong>Cloudflare Stream</strong> (يتولى الضغط والتوزيع حول العالم) ويحتاج تعديلاً برمجياً لاحقاً.</li>
+<li><strong>الاسم:</strong> اسم «ClipKat / كليب كات» قريب من علامات موجودة (KitKat) — لم يتغير التنبيه: راجع الاسم قانونياً قبل أي إطلاق تجاري.</li>
+<li><strong>الرخصة:</strong> جميع الحقوق محفوظة (ملف <code>LICENSE</code>).</li>
+</ul>
+<h2>الحجم المناسب للسيرفر (Hostinger)</h2>
+<table>
+<thead>
+<tr>
+<th>الخطة</th>
+<th>المواصفات</th>
+<th>تناسب</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>KVM 1</td>
+<td>1 vCPU · 4GB RAM · 50GB NVMe</td>
+<td>تجربة وعشرات المستخدمين (مساحة المقاطع تنفد بسرعة)</td>
+</tr>
+<tr>
+<td><strong>KVM 2 ⭐</strong></td>
+<td>2 vCPU · 8GB RAM · 100GB NVMe</td>
+<td><strong>البداية الموصى بها</strong> — مئات المستخدمين وآلاف المقاطع الصغيرة</td>
+</tr>
+<tr>
+<td>KVM 4</td>
+<td>4 vCPU · 16GB RAM · 200GB NVMe</td>
+<td>نمو أكبر أو مقاطع كثيرة</td>
+</tr>
+</tbody></table>
+<p>القرص هو أول ما ينفد (كل مقطع 10–50MB). يمكن الترقية لاحقاً من لوحة Hostinger دون فقد البيانات.</p>
+</body></html>
