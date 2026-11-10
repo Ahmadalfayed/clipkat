@@ -28,9 +28,10 @@ export async function render(el, params, ctx) {
       <div class="pactions">
         ${own ? `<button class="btn" id="editBtn">${icon('edit', { size: 16 })} ${esc(t('editProfile'))}</button>
                  <a class="btn" href="${store ? '#/dashboard' : '#/rent'}">${icon('store', { size: 16 })} ${esc(store ? t('dashboard') : t('rentNow'))}</a>
-                 ${api.social ? `<a class="btn" href="#/settings" aria-label="${esc(t('settings'))}">${icon('shield', { size: 16 })} ${esc(t('settings'))}</a>` : ''}`
+                 ${api.social ? `<a class="btn" href="#/settings" aria-label="${esc(t('settings'))}">${icon('shield', { size: 16 })} ${esc(t('settings'))}</a><a class="btn" href="#/drafts">${esc(t('drafts'))}</a>` : ''}`
               : rel.blockedByMe ? `<button class="btn" id="unblockBtn">${esc(t('unblock'))}</button>`
               : `<button class="btn ${following || rel.requested ? '' : 'primary'}" id="followBtn" aria-pressed="${following}">${esc(following ? t('followingBtn') : rel.requested ? t('requested') : t('follow'))}</button>`}
+        ${!own && api.social && ctx.me && !rel.blockedByMe ? `<a class="btn" href="#/chat/${user.id}">${esc(t('message'))}</a>` : ''}
         ${!own && api.social && ctx.me ? `<button class="btn" id="moreBtn" aria-label="${esc(t('more'))}">⋯</button>` : ''}
       </div>
       ${store && storeActive ? `<a class="store-chip" href="#/store/${store.id}"><img src="${storeLogo(store)}" alt=""><span class="grow"><b>${esc(store.name)}${store.verified ? verifiedBadge(t('verified')) : ''}</b><small>${esc(t('visitStore'))}</small></span>${icon('back', { size: 18, cls: 'flip-ltr' })}</a>` : ''}

@@ -9,6 +9,7 @@ import { buildRouter } from './routes.js';
 import { csrfGuard } from './auth.js';
 import { ensureDirs } from './uploads.js';
 import { hashPassword, HttpError } from './util.js';
+import { startPublisher } from './publisher.js';
 
 if (!config.jwtSecret || config.jwtSecret.length < 32) { console.error('JWT_SECRET missing or too short (>=32 chars). Run install.sh or set it in .env'); process.exit(1); }
 
@@ -50,6 +51,7 @@ async function main() {
   if (!fs.existsSync(config.webDir)) console.warn('web dir not found:', config.webDir);
   await waitForDb(); await migrate(); await ensureAdmin();
   const srv = app.listen(config.port, () => console.log(`[ClipKat] listening on :${config.port}`));
+  startPublisher();
   const stop = () => { srv.close(() => pool.end().then(() => process.exit(0))); setTimeout(() => process.exit(0), 8000).unref(); };
   process.on('SIGTERM', stop); process.on('SIGINT', stop);
 }

@@ -9,7 +9,9 @@ import { loadUser, requireUser, requireAdmin, setSession, clearSession } from '.
 import { HttpError, bad, isUuid, str, hashPassword, verifyPassword, safeEqual, normTags, localUrl, norm, ms } from './util.js';
 import { PROFILE_COLS, VIDEO_COLS, SOUND_COLS, mapProfile, mapVideo, mapStore, mapProduct, mapRental, mapNotif, mapComment, mapSound } from './mappers.js';
 import { STORE_POLICY_VERSION } from './policy.js';
-import { visibleSql, notBlockedSql, isBlockedBetween, canSeeUserContent, COMMENT_POLICIES, REPORT_REASONS } from './privacy.js';
+import { visibleSql, notBlockedSql, isBlockedBetween, canSeeUserContent, COMMENT_POLICIES, MESSAGE_POLICIES, REPORT_REASONS } from './privacy.js';
+import { forYou, parseCursor } from './feed.js';
+import { publishDue } from './publisher.js';
 import { imageUpload, videoUpload, audioUpload, sniffImage, sniffVideo, place, rm, rid, makePoster, dirs } from './uploads.js';
 import { sniffAudio, probe, extractAudio } from './media.js';
 import { activateRental, cancelRental, slots, notify } from './rentals.js';
@@ -148,12 +150,13 @@ export function buildRouter() {
   r.delete('/me/followers/:id', requireUser, h(async (req, res) => { await q('delete from follows where follower_id = $1 and followee_id = $2', [uid(req.params.id), req.user.id]); res.json({ ok: true }); }));
 
   // ---------------- Settings ----------------
-  const settingsOf = async (id) => { const r0 = (await q('select is_private, comment_policy from profiles where id = $1', [id])).rows[0]; return { isPrivate: r0.is_private, commentPolicy: r0.comment_policy }; };
+  const settingsOf = async (id) => { const r0 = (await q('select is_private, comment_policy, message_policy from profiles where id = $1', [id])).rows[0]; return { isPrivate: r0.is_private, commentPolicy: r0.comment_policy, messagePolicy: r0.message_policy }; };
   r.get('/me/settings', requireUser, h(async (req, res) => res.json(await settingsOf(req.user.id))));
   r.patch('/me/settings', requireUser, h(async (req, res) => {
     const b = req.body || {};
     if (b.isPrivate !== undefined && typeof b.isPrivate !== 'boolean') throw bad('bad');
     if (b.commentPolicy !== undefined && !COMMENT_POLICIES.includes(b.commentPolicy)) throw bad('bad');
+    if (b.messagePolicy !== undefined && !MESSAGE_POLICIES.includes(b.messagePolicy)) throw bad('bad');
     await tx(async (c) => {
       if (b.isPrivate !== undefined) {
         await c.query('update profiles set is_private = $1 where id = $2', [b.isPrivate, req.user.id]);
@@ -163,6 +166,7 @@ export function buildRouter() {
         }
       }
       if (b.commentPolicy !== undefined) await c.query('update profiles set comment_policy = $1 where id = $2', [b.commentPolicy, req.user.id]);
+      if (b.messagePolicy !== undefined) await c.query('update profiles set message_policy = $1 where id = $2', [b.messagePolicy, req.user.id]);
     });
     res.json(await settingsOf(req.user.id));
   }));
@@ -195,9 +199,11 @@ export function buildRouter() {
 
   // ---------------- Videos ----------------
   // viewer: المستخدم الحالي (أو null). الخصوصية والحظر يُفرضان هنا لكل استعلامات المقاطع
-  async function queryVideos(viewer, where = [], params = [], limit = 100) {
+  async function queryVideos(viewer, where = [], params = [], limit = 100, opts = {}) {
     where = [...where]; params = [...params];
     if (!viewer?.is_admin) { params.push(viewer?.id || null); where.push(visibleSql('v.user_id', `$${params.length}::uuid`)); }
+    if (!opts.includeUnpublished) where.push(`v.status = 'published'`);
+    else if (!viewer?.is_admin) { params.push(viewer?.id || null); where.push(`(v.status = 'published' or v.user_id = $${params.length})`); }
     const sql = `select ${VIDEO_COLS} from videos v where not v.is_hidden ${where.length ? 'and ' + where.join(' and ') : ''} order by v.created_at desc limit ${limit}`;
     return (await q(sql, params)).rows.map(mapVideo);
   }
@@ -212,9 +218,28 @@ export function buildRouter() {
     if (likedBy) { if (uid(likedBy) !== req.user?.id) throw new HttpError(403, 'forbidden'); add('v.id in (select video_id from likes where user_id = ?)', likedBy); }
     if (productStoreId) add('v.id in (select vp.video_id from video_products vp join products pr on pr.id = vp.product_id where pr.store_id = ?)', uid(productStoreId));
     if (req.query.soundId) add('v.sound_id = ?', uid(req.query.soundId));
+    const wantRanked = tab === 'foryou' || req.query.ranked === '1';
+    const wantPage = wantRanked || req.query.cursor != null || req.query.limit != null;
+    if (wantRanked) {
+      const cur = parseCursor(req.query.cursor);
+      return res.json(await forYou({ viewer: req.user, cursor: cur, limit: req.query.limit, excludeSeen: req.query.includeSeen !== '1' }));
+    }
+    if (wantPage) {
+      const limit = Math.max(1, Math.min(Number(req.query.limit) || 12, 30));
+      let cursorAt = null, cursorId = null;
+      if (req.query.cursor && isUuid(String(req.query.cursor).split('_').pop()) && String(req.query.cursor).includes('_')) {
+        const [ts, id] = [req.query.cursor.slice(0, req.query.cursor.lastIndexOf('_')), req.query.cursor.slice(req.query.cursor.lastIndexOf('_')+1)];
+        cursorAt = Number(ts); cursorId = id;
+      }
+      if (cursorAt && cursorId) { p.push(new Date(cursorAt), cursorId); w.push(`(v.created_at, v.id) < ($${p.length-1}, $${p.length}::uuid)`); }
+      const rows = await queryVideos(req.user, w, p, limit + 1);
+      const hasMore = rows.length > limit; const page = hasMore ? rows.slice(0, limit) : rows;
+      const last = page[page.length - 1];
+      return res.json({ videos: page, cursor: last ? `${last.createdAt}_${last.id}` : null, hasMore });
+    }
     res.json(await queryVideos(req.user, w, p));
   }));
-  r.get('/videos/:id', h(async (req, res) => res.json(isUuid(req.params.id) ? (await queryVideos(req.user, ['v.id = $1'], [req.params.id], 1))[0] || null : null)));
+  r.get('/videos/:id', h(async (req, res) => res.json(isUuid(req.params.id) ? (await queryVideos(req.user, ['v.id = $1'], [req.params.id], 1, { includeUnpublished: true }))[0] || null : null)));
   r.get('/me/interactions', requireUser, h(async (req, res) => {
     const [l, s] = await Promise.all([q('select video_id from likes where user_id = $1', [req.user.id]), q('select video_id from saves where user_id = $1', [req.user.id])]);
     res.json({ likes: l.rows.map((x) => x.video_id), saves: s.rows.map((x) => x.video_id) });
@@ -237,6 +262,16 @@ export function buildRouter() {
       let soundTitle = b.sound ? str(b.sound, 80) : null;
       let soundId = b.soundId && isUuid(String(b.soundId)) ? String(b.soundId) : null;
       const wantSave = b.saveSound === '1' || b.saveSound === 'true' || b.saveSound === true;
+      let status = 'published';
+      if (b.status === 'draft' || b.status === 'scheduled' || b.status === 'published') status = b.status;
+      let scheduledAt = null;
+      if (status === 'scheduled') {
+        const t = new Date(b.scheduledAt || b.scheduled_at || '');
+        if (!Number.isFinite(+t)) throw bad('schedule');
+        const soon = Date.now() + 30 * 1000, max = Date.now() + 30 * 86400000;
+        if (+t < soon || +t > max) throw bad('schedule');
+        scheduledAt = t;
+      }
       if (soundId) {
         const so = await visibleSound(req, soundId);
         soundTitle = so.title;
@@ -255,7 +290,7 @@ export function buildRouter() {
       const videoUrl = place(vf.path, 'videos', me, `${id}.${ext}`);
       // استخراج صوت أصلي من المقطع (اختياري) — قبل المعاملة حتى لا نطول القفل
       let extracted = null;
-      if (wantSave && !soundId) {
+      if (wantSave && !soundId && status === 'published') {
         const tmpA = path.join(dirs.tmp, 'snd-' + rid());
         const outA = await extractAudio(path.join(config.uploadDir, videoUrl.replace(/^\/uploads\/?/, '')), tmpA, { maxSec: config.maxSoundSec });
         if (!outA) { /* ننشر المقطع حتى لو فشل الاستخراج */ }
@@ -272,13 +307,13 @@ export function buildRouter() {
       const row = await tx(async (c) => {
         const sid = soundId || extracted?.id || null;
         if (extracted) await c.query('insert into sounds (id, user_id, title, audio_url, duration_ms, source_video_id) values ($1,$2,$3,$4,$5,$6)', [extracted.id, me, extracted.title, extracted.url, extracted.durationMs, id]);
-        const v = (await c.query('insert into videos (id, user_id, video_path, video_url, poster_url, caption, hashtags, sound, sound_id) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id', [id, me, videoUrl, videoUrl, posterUrl, caption, normTags(hashtags, caption), extracted?.title || soundTitle, sid])).rows[0];
-        if (soundId) await c.query('update sounds set uses_count = uses_count + 1 where id = $1', [soundId]);
+        const v = (await c.query('insert into videos (id, user_id, video_path, video_url, poster_url, caption, hashtags, sound, sound_id, status, scheduled_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning id', [id, me, videoUrl, videoUrl, posterUrl, caption, normTags(hashtags, caption), extracted?.title || soundTitle, sid, status, scheduledAt])).rows[0];
+        if (soundId && status === 'published') await c.query('update sounds set uses_count = uses_count + 1 where id = $1', [soundId]);
         const mine = productIds.filter(isUuid).length ? (await c.query('select pr.id from products pr join stores s on s.id = pr.store_id where s.owner_id = $1 and pr.id = any($2::uuid[])', [me, productIds.filter(isUuid)])).rows : [];
         for (const m of mine) await c.query('insert into video_products (video_id, product_id) values ($1,$2) on conflict do nothing', [id, m.id]);
         return v;
       });
-      res.status(201).json((await queryVideos(req.user, ['v.id = $1'], [row.id], 1))[0]);
+      res.status(201).json((await queryVideos(req.user, ['v.id = $1'], [row.id], 1, { includeUnpublished: true }))[0]);
     } finally { tmp.forEach(rm); }
   }));
 
@@ -287,10 +322,46 @@ export function buildRouter() {
     const d = await q('delete from videos where id = $1 and (user_id = $2 or $3) returning 1', [id, req.user.id, !!req.user.is_admin]);
     if (!d.rowCount) throw new HttpError(403, 'forbidden'); res.json({ ok: true });
   }));
+  r.get('/me/drafts', requireUser, h(async (req, res) => {
+    res.json(await queryVideos(req.user, ["v.user_id = $1", "v.status in ('draft','scheduled')"], [req.user.id], 100, { includeUnpublished: true }));
+  }));
+  r.patch('/videos/:id', requireUser, h(async (req, res) => {
+    const id = uid(req.params.id);
+    const row = need((await q('select * from videos where id = $1', [id])).rows[0]);
+    if (row.user_id !== req.user.id && !req.user.is_admin) throw new HttpError(403, 'forbidden');
+    const b = req.body || {};
+    let status = row.status, scheduledAt = row.scheduled_at;
+    if (b.status !== undefined) {
+      if (!['draft', 'scheduled', 'published'].includes(b.status)) throw bad('bad');
+      status = b.status;
+    }
+    if (status === 'scheduled') {
+      const t = new Date(b.scheduledAt || b.scheduled_at || scheduledAt);
+      if (!Number.isFinite(+t)) throw bad('schedule');
+      if (+t > Date.now() + 30 * 86400000) throw bad('schedule');
+      scheduledAt = t;
+      if (+t <= Date.now()) { status = 'published'; }  // إن حان الوقت عند الحفظ يُنشر مباشرة
+    }
+    if (status === 'published') scheduledAt = null;
+    if (status === 'draft') scheduledAt = null;
+    const wasPub = row.status === 'published';
+    await q('update videos set status = $1, scheduled_at = $2 where id = $3', [status, scheduledAt, id]);
+    if (!wasPub && status === 'published' && row.sound_id) await q('update sounds set uses_count = uses_count + 1 where id = $1', [row.sound_id]);
+    res.json((await queryVideos(req.user, ['v.id = $1'], [id], 1, { includeUnpublished: true }))[0]);
+  }));
+  // مشاهدة: مرة لكل مستخدم/مقطع، completed يُرفع ولا يُخفض، لا تُكشف للآخرين
+  r.post('/videos/:id/watch', requireUser, h(async (req, res) => {
+    const v = await visibleVideo(req, uid(req.params.id));
+    const completed = req.body?.completed === true;
+    await q(`insert into watch_events (user_id, video_id, completed) values ($1,$2,$3)
+      on conflict (user_id, video_id) do update set watched_at = now(), completed = watch_events.completed or excluded.completed`, [req.user.id, v.id, completed]);
+    res.json({ ok: true });
+  }));
 
   // يرجع المقطع إن كان مرئياً للمستخدم، وإلا 404 (لا نكشف وجود محتوى خاص)
   async function visibleVideo(req, id) {
-    const v = need((await q('select id, user_id from videos where id = $1 and not is_hidden', [id])).rows[0]);
+    const v = need((await q("select id, user_id, status from videos where id = $1 and not is_hidden", [id])).rows[0]);
+    if (v.status !== 'published' && req.user?.id !== v.user_id && !req.user?.is_admin) throw new HttpError(404, 'notfound');
     if (!(await canSeeUserContent(req.user, v.user_id))) throw new HttpError(404, 'notfound');
     return v;
   }
@@ -541,26 +612,127 @@ export function buildRouter() {
     const users = ids.length ? (await q(`select ${PROFILE_COLS} from profiles p where p.id = any($1::uuid[])`, [ids])).rows.map(mapProfile) : [];
     res.json({ notifications: rows.map(mapNotif), users });
   }));
-  r.get('/notifications/unread-count', h(async (req, res) => res.json({ count: req.user ? (await q('select count(*)::int n from notifications where user_id = $1 and not read', [req.user.id])).rows[0].n : 0 })));
+  r.get('/notifications/unread-count', h(async (req, res) => {
+    if (!req.user) return res.json({ count: 0, notifications: 0, messages: 0 });
+    const n = (await q('select count(*)::int n from notifications where user_id = $1 and not read', [req.user.id])).rows[0].n;
+    const m = (await q(`select count(*)::int n from conversations c
+      join messages msg on msg.conversation_id = c.id and msg.sender_id <> $1 and msg.deleted_at is null
+      and msg.created_at > coalesce((select last_read_at from conversation_reads r where r.conversation_id = c.id and r.user_id = $1), 'epoch')
+      where (c.user_a = $1 or c.user_b = $1)`, [req.user.id])).rows[0].n;
+    res.json({ notifications: n, messages: m, count: n + m });
+  }));
   r.post('/notifications/read-all', requireUser, h(async (req, res) => { await q('update notifications set read = true where user_id = $1 and not read', [req.user.id]); res.json({ ok: true }); }));
+
+  // ---------------- Direct messages (المرحلة 3) ----------------
+  const pair = (a, b) => (a < b ? [a, b] : [b, a]);
+  async function assertCanMessage(from, to) {
+    if (from === to) throw bad('self');
+    need((await q('select 1 from profiles where id = $1 and not is_banned', [to])).rowCount);
+    if (await isBlockedBetween(from, to)) throw new HttpError(403, 'blocked');
+    const t = (await q('select is_private, message_policy from profiles where id = $1', [to])).rows[0];
+    if (t.is_private && !(await q('select 1 from follows where follower_id = $1 and followee_id = $2', [from, to])).rowCount)
+      throw new HttpError(403, 'private');
+    if (t.message_policy === 'nobody') throw new HttpError(403, 'messagesOff');
+    if (t.message_policy === 'followers' && !(await q('select 1 from follows where follower_id = $1 and followee_id = $2', [from, to])).rowCount)
+      throw new HttpError(403, 'followersOnly');
+    if (t.message_policy === 'mutual') {
+      const [ab, ba] = await Promise.all([
+        q('select 1 from follows where follower_id = $1 and followee_id = $2', [from, to]),
+        q('select 1 from follows where follower_id = $1 and followee_id = $2', [to, from])
+      ]);
+      if (!ab.rowCount || !ba.rowCount) throw new HttpError(403, 'mutualOnly');
+    }
+  }
+  async function getOrCreateConv(a, b) {
+    const [x, y] = pair(a, b);
+    const ex = (await q('select * from conversations where user_a = $1 and user_b = $2', [x, y])).rows[0];
+    if (ex) return ex;
+    return (await q('insert into conversations (user_a, user_b) values ($1,$2) on conflict (user_a, user_b) do update set last_at = conversations.last_at returning *', [x, y])).rows[0];
+  }
+  const otherOf = (c, me) => (c.user_a === me ? c.user_b : c.user_a);
+  const mapMsg = (m) => ({ id: m.id, conversationId: m.conversation_id, senderId: m.sender_id, type: m.type, text: m.deleted_at ? '' : m.text, videoId: m.deleted_at ? null : m.video_id, createdAt: ms(m.created_at), deleted: !!m.deleted_at });
+
+  r.get('/conversations', requireUser, h(async (req, res) => {
+    const rows = (await q(`select c.*,
+        (select count(*)::int from messages m where m.conversation_id = c.id and m.sender_id <> $1 and m.deleted_at is null
+           and m.created_at > coalesce((select r.last_read_at from conversation_reads r where r.conversation_id = c.id and r.user_id = $1), 'epoch')) as unread
+      from conversations c
+      where (c.user_a = $1 or c.user_b = $1)
+        and ${notBlockedSql('c.user_a', '$1::uuid')} and ${notBlockedSql('c.user_b', '$1::uuid')}
+      order by c.last_at desc limit 100`, [req.user.id])).rows;
+    const oids = rows.map((c) => otherOf(c, req.user.id));
+    const users = oids.length ? (await q(`select ${PROFILE_COLS} from profiles p where p.id = any($1::uuid[])`, [oids])).rows.map(mapProfile) : [];
+    res.json({ conversations: rows.map((c) => ({ id: c.id, otherId: otherOf(c, req.user.id), lastAt: ms(c.last_at), preview: c.last_preview, unread: c.unread })), users });
+  }));
+  r.get('/conversations/with/:uid', requireUser, h(async (req, res) => {
+    const to = uid(req.params.uid); if (to === req.user.id) throw bad('self');
+    const [x, y] = pair(req.user.id, to);
+    const c = (await q('select * from conversations where user_a = $1 and user_b = $2', [x, y])).rows[0];
+    res.json(c ? { id: c.id, otherId: to, lastAt: ms(c.last_at), preview: c.last_preview } : null);
+  }));
+  r.get('/conversations/:id/messages', requireUser, h(async (req, res) => {
+    const c = need((await q('select * from conversations where id = $1', [uid(req.params.id)])).rows[0]);
+    if (c.user_a !== req.user.id && c.user_b !== req.user.id) throw new HttpError(403, 'forbidden');
+    const params = [c.id]; let w = 'm.conversation_id = $1';
+    if (req.query.after && isUuid(req.query.after)) { params.push(req.query.after); w += ` and m.created_at > (select created_at from messages where id = $${params.length})`; }
+    if (req.query.before && isUuid(req.query.before)) { params.push(req.query.before); w += ` and m.created_at < (select created_at from messages where id = $${params.length})`; }
+    const rows = (await q(`select m.* from messages m where ${w} order by m.created_at desc limit 80`, params)).rows.reverse();
+    const vids = [...new Set(rows.filter((m) => m.video_id && !m.deleted_at).map((m) => m.video_id))];
+    const videos = vids.length ? await queryVideos(req.user, ['v.id = any($1::uuid[])'], [vids], 80) : [];
+    res.json({ messages: rows.map(mapMsg), videos });
+  }));
+  r.post('/conversations/:id/read', requireUser, h(async (req, res) => {
+    const c = need((await q('select * from conversations where id = $1', [uid(req.params.id)])).rows[0]);
+    if (c.user_a !== req.user.id && c.user_b !== req.user.id) throw new HttpError(403, 'forbidden');
+    await q(`insert into conversation_reads (conversation_id, user_id, last_read_at) values ($1,$2,now())
+      on conflict (conversation_id, user_id) do update set last_read_at = now()`, [c.id, req.user.id]);
+    res.json({ ok: true });
+  }));
+  r.post('/users/:id/messages', requireUser, mkLimit(60000, 40), h(async (req, res) => {
+    const to = uid(req.params.id);
+    await assertCanMessage(req.user.id, to);
+    const type = req.body?.type === 'clip' ? 'clip' : 'text';
+    let text = '', videoId = null;
+    if (type === 'text') { text = str(req.body?.text, 500); if (!text) throw bad('empty'); }
+    else {
+      videoId = uid(req.body?.videoId);
+      const v = await visibleVideo(req, videoId);
+      text = v.caption ? String(v.caption).slice(0, 80) : 'مقطع';
+    }
+    const c = await getOrCreateConv(req.user.id, to);
+    const m = (await q('insert into messages (conversation_id, sender_id, type, text, video_id) values ($1,$2,$3,$4,$5) returning *', [c.id, req.user.id, type, text, videoId])).rows[0];
+    const preview = type === 'clip' ? '📎 مقطع' : text.slice(0, 80);
+    await q('update conversations set last_at = now(), last_preview = $1 where id = $2', [preview, c.id]);
+    res.status(201).json({ conversationId: c.id, message: mapMsg(m) });
+  }));
+  r.delete('/messages/:id', requireUser, h(async (req, res) => {
+    const d = await q("update messages set deleted_at = now(), text = '', video_id = null where id = $1 and sender_id = $2 and deleted_at is null returning conversation_id", [uid(req.params.id), req.user.id]);
+    if (!d.rowCount) throw new HttpError(403, 'forbidden');
+    res.json({ ok: true });
+  }));
 
   // ---------------- Reports (التبليغ) ----------------
   r.post('/reports', requireUser, mkLimit(3600000, 30), h(async (req, res) => {
     const b = req.body || {};
-    const type = ['video', 'user', 'comment', 'sound'].includes(b.type) ? b.type : (() => { throw bad('bad'); })();
+    const type = ['video', 'user', 'comment', 'sound', 'message'].includes(b.type) ? b.type : (() => { throw bad('bad'); })();
     const reason = REPORT_REASONS.includes(b.reason) ? b.reason : (() => { throw bad('reason'); })();
     const details = str(b.details, 500); const tid = uid(b.id);
-    let videoId = null, commentId = null, soundIdRep = null, targetUser;
+    let videoId = null, commentId = null, soundIdRep = null, messageId = null, targetUser;
     if (type === 'video') { const v = await visibleVideo(req, tid); videoId = v.id; targetUser = v.user_id; }
     else if (type === 'comment') {
       const c = need((await q('select id, video_id, user_id from comments where id = $1', [tid])).rows[0]);
       await visibleVideo(req, c.video_id); commentId = c.id; videoId = c.video_id; targetUser = c.user_id;
     } else if (type === 'sound') { const so = await visibleSound(req, tid); soundIdRep = so.id; targetUser = so.user_id; }
-    else { need((await q('select 1 from profiles where id = $1', [tid])).rowCount); targetUser = tid; }
+    else if (type === 'message') {
+      const m = need((await q(`select m.*, c.user_a, c.user_b from messages m join conversations c on c.id = m.conversation_id where m.id = $1 and m.deleted_at is null`, [tid])).rows[0]);
+      if (m.user_a !== req.user.id && m.user_b !== req.user.id) throw new HttpError(404, 'notfound');
+      if (m.sender_id === req.user.id) throw bad('self');
+      messageId = m.id; targetUser = m.sender_id;
+    } else { need((await q('select 1 from profiles where id = $1', [tid])).rowCount); targetUser = tid; }
     if (targetUser === req.user.id) throw bad('self');
-    const dup = await q(`select 1 from reports where reporter_id = $1 and status = 'open' and target_type = $2 and target_user_id = $3 and video_id is not distinct from $4 and comment_id is not distinct from $5 and sound_id is not distinct from $6`, [req.user.id, type, targetUser, videoId, commentId, soundIdRep]);
+    const dup = await q(`select 1 from reports where reporter_id = $1 and status = 'open' and target_type = $2 and target_user_id = $3 and video_id is not distinct from $4 and comment_id is not distinct from $5 and sound_id is not distinct from $6 and message_id is not distinct from $7`, [req.user.id, type, targetUser, videoId, commentId, soundIdRep, messageId]);
     if (dup.rowCount) throw new HttpError(409, 'alreadyReported');
-    await q('insert into reports (reporter_id, target_type, target_user_id, video_id, comment_id, sound_id, reason, details) values ($1,$2,$3,$4,$5,$6,$7,$8)', [req.user.id, type, targetUser, videoId, commentId, soundIdRep, reason, details]);
+    await q('insert into reports (reporter_id, target_type, target_user_id, video_id, comment_id, sound_id, message_id, reason, details) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [req.user.id, type, targetUser, videoId, commentId, soundIdRep, messageId, reason, details]);
     res.status(201).json({ ok: true });
   }));
   r.get('/admin/reports', requireAdmin, h(async (req, res) => {

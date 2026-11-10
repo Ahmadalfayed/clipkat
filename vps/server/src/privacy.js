@@ -19,4 +19,5 @@ export async function canSeeUserContent(viewer, authorId) {
   return (await q(`select ${visibleSql('$1::uuid', '$2::uuid')} as ok`, [authorId, viewer?.id || null])).rows[0].ok === true;
 }
 export const COMMENT_POLICIES = ['everyone', 'followers', 'nobody'];
+export const MESSAGE_POLICIES = ['everyone', 'followers', 'mutual', 'nobody'];
 export const REPORT_REASONS = ['spam', 'harassment', 'hate', 'violence', 'nudity', 'scam', 'ip', 'other'];

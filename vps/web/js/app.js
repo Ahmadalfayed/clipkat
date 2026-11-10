@@ -8,6 +8,7 @@ const routes = {
   discover: () => import('./views/discover.js'), tag: () => import('./views/discover.js'),
   upload: () => import('./views/studio.js'), inbox: () => import('./views/inbox.js'),
   sound: () => import('./views/sound.js'), sounds: () => import('./views/sound.js'),
+  chat: () => import('./views/chat.js'), drafts: () => import('./views/drafts.js'),
   profile: () => import('./views/profile.js'), me: () => import('./views/profile.js'), login: () => import('./views/auth.js'),
   stores: () => import('./views/stores.js'), store: () => import('./views/stores.js'), rent: () => import('./views/stores.js'),
   checkout: () => import('./views/checkout.js'), dashboard: () => import('./views/dashboard.js'), admin: () => import('./views/admin.js'), settings: () => import('./views/settings.js'), policy: () => import('./views/policy.js')
@@ -46,7 +47,7 @@ async function renderNav() {
   const nav = $('#nav'); const cur = (location.hash.slice(2).split(/[/?]/)[0]) || 'feed';
   const unread = ctx.me ? await api.unreadCount() : 0;
   nav.innerHTML = NAV.map(([r, ic, label]) => {
-    const active = cur === r || (r === 'feed' && (cur === 'following')) || (r === 'me' && cur === 'profile' && location.hash.includes(ctx.me?.id || '#')) || (r === 'stores' && ['store', 'rent', 'checkout', 'dashboard'].includes(cur));
+    const active = cur === r || (r === 'feed' && (cur === 'following')) || (r === 'me' && cur === 'profile' && location.hash.includes(ctx.me?.id || '#')) || (r === 'stores' && ['store', 'rent', 'checkout', 'dashboard'].includes(cur)) || (r === 'inbox' && cur === 'chat');
     if (r === 'upload') return `<a href="#/upload" class="nav-plus" aria-label="${esc(t(label))}">${icon('plus', { size: 26 })}</a>`;
     return `<a href="#/${r}" class="${active ? 'active' : ''}" ${active ? 'aria-current="page"' : ''}>${icon(ic, { size: 24 })}<span>${esc(t(label))}</span>${r === 'inbox' && unread ? `<b class="dot" aria-label="${unread}">${unread > 9 ? '9+' : unread}</b>` : ''}</a>`;
   }).join('');

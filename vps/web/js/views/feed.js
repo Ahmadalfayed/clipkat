@@ -11,11 +11,23 @@ const linkify = (s) => esc(s).replace(/#([\p{L}\p{N}_]+)/gu, (m, tag) => `<a hre
 
 export async function render(el, params, ctx) {
   const mode = params.name;
-  let videos = [];
+  const tab = mode === 'following' ? 'following' : 'foryou';
+  const paged = mode !== 'watch' && !!api.social;
+  let videos = [], cursor = null, hasMore = false, loadingMore = false;
   if (mode === 'watch') {
     const v = await api.getVideo(params.args[0]);
-    if (v) { const list = params.query.get('from') === 'tag' ? await api.listVideos({ tag: params.query.get('tag') }) : await api.listVideos({ userId: v.userId }); const i = list.findIndex((x) => x.id === v.id); videos = [...list.slice(i), ...list.slice(0, i)]; }
-  } else videos = await api.listVideos({ tab: mode === 'following' ? 'following' : 'foryou' });
+    if (v) {
+      const raw = params.query.get('from') === 'tag' ? await api.listVideos({ tag: params.query.get('tag') }) : await api.listVideos({ userId: v.userId });
+      const list = Array.isArray(raw) ? raw : (raw.videos || []);
+      const i = list.findIndex((x) => x.id === v.id); videos = i >= 0 ? [...list.slice(i), ...list.slice(0, i)] : [v];
+    }
+  } else if (paged) {
+    const page = await api.listFeedPage({ tab, limit: 8 });
+    videos = page.videos; cursor = page.cursor; hasMore = page.hasMore;
+  } else {
+    const raw = await api.listVideos({ tab });
+    videos = Array.isArray(raw) ? raw : (raw.videos || []);
+  }
 
   const top = mode === 'watch'
     ? `<div class="feed-top"><button class="icon-btn glass" data-act="back" aria-label="${esc(t('back'))}">${icon('back', { size: 22, cls: 'flip-rtl' })}</button><span></span><span></span></div>`
@@ -37,38 +49,56 @@ export async function render(el, params, ctx) {
     return;
   }
 
-  const slides = await Promise.all(videos.map(async (v) => {
+  async function pack(v) {
     const [user, stats, products] = await Promise.all([api.getUser(v.userId), api.videoStats(v), api.productsByIds(v.productIds)]);
     const following = ctx.me ? await api.isFollowing(ctx.me.id, v.userId) : false;
     const store = products.length ? await api.getStore(products[0].storeId) : null;
     return { v, user, stats, products, following, store };
-  }));
+  }
+  const slides = await Promise.all(videos.map(pack));
 
   el.innerHTML = `${top}<div class="feed" id="feed" tabindex="0" aria-label="${esc(t('forYou'))}">${slides.map(slideHTML).join('')}</div>
     <div class="feed-arrows"><button class="icon-btn glass" data-dir="-1" aria-label="↑">${icon('back', { size: 20, cls: 'rot-up' })}</button><button class="icon-btn glass" data-dir="1" aria-label="↓">${icon('back', { size: 20, cls: 'rot-down' })}</button></div>`;
   const feed = $('#feed', el);
   const byId = new Map(slides.map((s) => [s.v.id, s]));
 
-  // تحميل كسول للفيديو + تشغيل/إيقاف حسب الظهور
-  const slideEls = $$('.slide', feed);
-  async function ensureSrc(sl) { if (!sl) return; const vEl = $('video', sl); if (!vEl.dataset.loaded) { vEl.dataset.loaded = '1'; vEl.src = await api.videoURL(byId.get(sl.dataset.id).v); } }
+  const slideEls = () => $$('.slide', feed);
+  async function ensureSrc(sl) { if (!sl) return; const rec = byId.get(sl.dataset.id); if (!rec) return; const vEl = $('video', sl); if (!vEl.dataset.loaded) { vEl.dataset.loaded = '1'; vEl.src = await api.videoURL(rec.v); } }
+  async function loadMore() {
+    if (!paged || !hasMore || loadingMore) return; loadingMore = true;
+    try {
+      const page = await api.listFeedPage({ tab, cursor, limit: 8 });
+      cursor = page.cursor; hasMore = page.hasMore;
+      for (const v of page.videos) {
+        if (byId.has(v.id)) continue;
+        const s = await pack(v); byId.set(s.v.id, s);
+        feed.insertAdjacentHTML('beforeend', slideHTML(s, 99));
+        hookSlide(feed.lastElementChild);
+      }
+    } finally { loadingMore = false; }
+  }
   const io = new IntersectionObserver((entries) => {
+    const all = slideEls();
     for (const en of entries) {
       const sl = en.target, vEl = $('video', sl);
       if (en.isIntersecting && en.intersectionRatio >= 0.6) {
         sl.classList.add('active');
         ensureSrc(sl).then(() => { vEl.muted = muted; vEl.play().catch(() => {}); });
-        const i = slideEls.indexOf(sl); ensureSrc(slideEls[i + 1]); ensureSrc(slideEls[i - 1]);
+        const i = all.indexOf(sl); ensureSrc(all[i + 1]); ensureSrc(all[i - 1]);
         sl.querySelector('.mute-hint')?.classList.toggle('show', muted);
+        if (ctx.me && api.social && !sl.dataset.watched) { sl.dataset.watched = '1'; api.recordWatch(sl.dataset.id); }
+        if (paged && i >= all.length - 2) loadMore();
       } else { sl.classList.remove('active'); vEl.pause(); }
     }
   }, { root: feed, threshold: [0, 0.6, 1] });
-  slideEls.forEach((s) => io.observe(s));
-
-  for (const sl of slideEls) {
+  function hookSlide(sl) {
+    if (!sl) return;
     const vEl = $('video', sl), bar = $('.progress i', sl);
     vEl.addEventListener('timeupdate', () => { if (vEl.duration) bar.style.width = (vEl.currentTime / vEl.duration) * 100 + '%'; });
+    vEl.addEventListener('ended', () => { if (ctx.me && api.social) api.recordWatch(sl.dataset.id, { completed: true }); });
+    io.observe(sl);
   }
+  slideEls().forEach(hookSlide);
 
   // نقرة: تشغيل الصوت / إيقاف مؤقت — نقرتان: إعجاب
   let lastTap = 0, tapTimer;

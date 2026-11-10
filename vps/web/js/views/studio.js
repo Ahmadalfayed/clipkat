@@ -207,6 +207,12 @@ export async function render(el, params, ctx) {
         <label class="field"><span>${esc(t('caption'))}</span><textarea name="caption" rows="3" maxlength="300" placeholder="${esc(t('captionPh'))}"></textarea></label>
         <label class="field"><span>${esc(t('hashtags'))}</span><input name="hashtags" placeholder="${esc(t('hashtagsPh'))}"></label>
         ${sound ? `<p class="note">${icon('music', { size: 16 })} ${esc(sound.title)}</p>` : `<label class="check-row"><input type="checkbox" name="saveSound" value="1"> ${esc(t('saveAsSound'))}</label>`}
+        <fieldset class="field"><legend>${esc(t('publishWhen'))}</legend>
+          <label class="radio-row"><input type="radio" name="when" value="now" checked> ${esc(t('publishNow'))}</label>
+          <label class="radio-row"><input type="radio" name="when" value="draft"> ${esc(t('saveDraft'))}</label>
+          <label class="radio-row"><input type="radio" name="when" value="schedule"> ${esc(t('schedulePublish'))}</label>
+          <label class="field" id="schedWrap" hidden><span>${esc(t('scheduleAt'))}</span><input type="datetime-local" name="scheduledAt"></label>
+        </fieldset>
         <fieldset class="field"><legend>${icon('bag', { size: 16 })} ${esc(t('attachProducts'))}</legend>
           ${products.length ? `<div class="tag-products">${products.map((p) => `<label class="tagp"><input type="checkbox" name="products" value="${p.id}"><img src="${productImg(p)}" alt=""><span><b>${esc(p.name)}</b><small>${esc(fmtKWD(p.price))}</small></span><i class="tick">${icon('check', { size: 14 })}</i></label>`).join('')}</div>`
             : `<p class="muted sm">${esc(store && !active ? t('storeInactive') : t('noStoreForTag'))} <a href="${store ? '#/dashboard' : '#/rent'}">${esc(store ? t('dashboard') : t('rentNow'))}</a></p>`}
@@ -215,17 +221,22 @@ export async function render(el, params, ctx) {
         <button class="btn ghost block" type="button" id="backEdit">${esc(t('backEdit'))}</button>
       </form></div>`;
     $('#backEdit', el).addEventListener('click', async () => { st.step = 'edit'; st.exported = null; await draw(); });
+    el.querySelectorAll('input[name=when]').forEach((r) => r.addEventListener('change', () => { $('#schedWrap', el).hidden = el.querySelector('input[name=when]:checked')?.value !== 'schedule'; }));
     $('#pub', el).addEventListener('submit', async (e) => {
       e.preventDefault(); if (!file) { toast(t('pickFirst'), 'warn'); return; }
       const btn = $('button[type=submit]', el); btn.disabled = true; btn.textContent = t('publishing');
       try {
         const fd = new FormData(e.target);
-        const v = await api.createVideo({
+        const when = fd.get('when') || 'now';
+        const payload = {
           file, poster: st.poster, caption: fd.get('caption'), hashtags: String(fd.get('hashtags') || '').split(/[\s,،]+/).filter(Boolean),
           sound: sound?.title || null, soundId: sound?.id || null, saveSound: !sound && fd.get('saveSound') === '1',
           productIds: $$('input[name=products]:checked', el).map((i) => i.value)
-        });
-        toast(t('published'), 'ok'); cleanupMedia(); ctx.navigate('#/watch/' + v.id);
+        };
+        if (when === 'draft') payload.status = 'draft';
+        if (when === 'schedule') { payload.status = 'scheduled'; payload.scheduledAt = new Date(fd.get('scheduledAt')).toISOString(); if (!fd.get('scheduledAt') || Number.isNaN(+new Date(fd.get('scheduledAt')))) { toast(t('scheduleNeed'), 'warn'); btn.disabled = false; btn.textContent = t('publish'); return; } }
+        const v = await api.createVideo(payload);
+        toast(when === 'draft' ? t('draftSaved') : when === 'schedule' ? t('scheduledOk') : t('published'), 'ok'); cleanupMedia(); ctx.navigate(when === 'now' ? '#/watch/' + v.id : '#/drafts');
       } catch (err) {
         console.warn(err); toast(err.message === 'tooLarge' ? t('fileTooLarge', { n: err.limit }) : err.message === 'tooLong' ? t('videoTooLong', { n: err.limit }) : err.message, 'warn');
         btn.disabled = false; btn.textContent = t('publish');

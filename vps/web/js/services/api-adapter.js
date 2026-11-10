@@ -97,15 +97,18 @@ export class ApiAdapter {
   // ---------- Videos ----------
   _mapVideo(v) { const o = this.videos.get(v.id) || {}; Object.assign(o, v); this.videos.set(v.id, o); return o; }
   async _vids(rows) { await this._prefetchProfiles(rows.map((r) => r.userId)); return rows.map((v) => this._mapVideo(v)); }
-  async listVideos({ tab = 'foryou', userId, tag, savedBy, likedBy, productStoreId, soundId } = {}) {
-    return this._vids(await this._req('GET', '/videos' + this._qs({ tab, userId, tag, savedBy, likedBy, productStoreId, soundId })));
+  async listVideos({ tab, userId, tag, savedBy, likedBy, productStoreId, soundId, cursor, limit, includeSeen } = {}) {
+    const r = await this._req('GET', '/videos' + this._qs({ tab, userId, tag, savedBy, likedBy, productStoreId, soundId, cursor, limit, includeSeen: includeSeen ? '1' : undefined }));
+    if (Array.isArray(r)) return this._vids(r);
+    return { videos: await this._vids(r.videos || []), cursor: r.cursor || null, hasMore: !!r.hasMore };
   }
+  async listFeedPage(opts) { const r = await this.listVideos(opts); return Array.isArray(r) ? { videos: r, cursor: null, hasMore: false } : r; }
   async getVideo(id) {
     if (!id || !UUID_RE.test(id)) return null; if (this.videos.has(id)) return this.videos.get(id);
     const v = await this._req('GET', '/videos/' + id); return v ? (await this._vids([v]))[0] : null;
   }
   async videoURL(v) { return v.src; }
-  async createVideo({ file, poster, caption = '', hashtags = [], sound, soundId, saveSound = false, productIds = [] }) {
+  async createVideo({ file, poster, caption = '', hashtags = [], sound, soundId, saveSound = false, productIds = [], status, scheduledAt } = {}) {
     await this._meOrThrow();
     if (file.size > this.maxVideoMb * 1024 * 1024) { const e = new Error('tooLarge'); e.limit = this.maxVideoMb; throw e; }
     const fd = new FormData();
@@ -115,6 +118,8 @@ export class ApiAdapter {
     if (sound) fd.append('sound', String(sound).slice(0, 80));
     if (soundId) fd.append('soundId', soundId);
     if (saveSound) fd.append('saveSound', '1');
+    if (status) fd.append('status', status);
+    if (scheduledAt) fd.append('scheduledAt', scheduledAt);
     return (await this._vids([await this._req('POST', '/videos', undefined, { form: fd })]))[0];
   }
   async _loadMine() {
@@ -230,8 +235,22 @@ export class ApiAdapter {
     const me = await this.currentUser(); if (!me) return [];
     const r = await this._req('GET', '/notifications'); for (const u of r.users) this.profiles.set(u.id, u); return r.notifications;
   }
-  async unreadCount() { const me = await this.currentUser(); if (!me) return 0; return (await this._req('GET', '/notifications/unread-count')).count; }
+  async unreadCount() { const me = await this.currentUser(); if (!me) return 0; const r = await this._req('GET', '/notifications/unread-count'); return r.count || 0; }
+  async unreadBreakdown() { const me = await this.currentUser(); if (!me) return { count: 0, notifications: 0, messages: 0 }; return this._req('GET', '/notifications/unread-count'); }
   async markAllRead() { await this._meOrThrow(); await this._req('POST', '/notifications/read-all', {}); }
+  async listConversations() {
+    const r = await this._req('GET', '/conversations'); for (const u of r.users || []) this.profiles.set(u.id, u); return r;
+  }
+  async getConversationWith(uid) { return this._req('GET', '/conversations/with/' + uid); }
+  async listMessages(id, { after, before } = {}) { const r = await this._req('GET', `/conversations/${id}/messages` + this._qs({ after, before })); if (r.videos) await this._vids(r.videos); return r; }
+  async sendMessage(userId, body) { return this._req('POST', `/users/${userId}/messages`, body); }
+  async readConversation(id) { return this._req('POST', `/conversations/${id}/read`, {}); }
+  async deleteMessage(id) { return this._req('DELETE', '/messages/' + id); }
+  async recordWatch(id, { completed = false } = {}) { try { await this._req('POST', `/videos/${id}/watch`, { completed }); } catch {} }
+  async listDrafts() { return this._vids(await this._req('GET', '/me/drafts')); }
+  async updateVideo(id, body) { const v = await this._req('PATCH', '/videos/' + id, body); return v ? this._mapVideo(v) : v; }
+  async deleteVideo(id) { return this._req('DELETE', '/videos/' + id); }
+
 
   // ---------- Admin ----------
   async adminSummary() {

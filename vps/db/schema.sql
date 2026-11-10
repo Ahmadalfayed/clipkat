@@ -266,3 +266,64 @@ create index if not exists videos_sound_idx on videos (sound_id) where sound_id 
 alter table reports add column if not exists sound_id uuid references sounds(id) on delete set null;
 alter table reports drop constraint if exists reports_target_type_chk;
 alter table reports add constraint reports_target_type_chk check (target_type in ('video','user','comment','sound'));
+
+-- =====================================================================
+--  المرحلة 3 (الرسائل، فيد أذكى، المسودات والجدولة) — إضافات فقط
+-- =====================================================================
+alter table profiles add column if not exists message_policy text not null default 'everyone';
+do $$ begin
+  alter table profiles add constraint profiles_message_policy_chk check (message_policy in ('everyone','followers','mutual','nobody'));
+exception when duplicate_object then null; end $$;
+
+create table if not exists conversations (
+  id uuid primary key default gen_random_uuid(),
+  user_a uuid not null references profiles(id) on delete cascade,
+  user_b uuid not null references profiles(id) on delete cascade,
+  last_at timestamptz not null default now(),
+  last_preview text not null default '',
+  created_at timestamptz not null default now(),
+  check (user_a < user_b)
+);
+create unique index if not exists conversations_pair_uidx on conversations (user_a, user_b);
+create index if not exists conversations_last_idx on conversations (last_at desc);
+
+create table if not exists messages (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references conversations(id) on delete cascade,
+  sender_id uuid not null references profiles(id) on delete cascade,
+  type text not null default 'text' check (type in ('text','clip')),
+  text text not null default '' check (char_length(text) <= 500),
+  video_id uuid references videos(id) on delete set null,
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+create index if not exists messages_conv_idx on messages (conversation_id, created_at desc);
+
+create table if not exists conversation_reads (
+  conversation_id uuid not null references conversations(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  last_read_at timestamptz not null default now(),
+  primary key (conversation_id, user_id)
+);
+
+-- أحداث المشاهدة: حد أدنى من البيانات (بدون مدة تفصيلية أو مشاركة مع الآخرين)
+create table if not exists watch_events (
+  user_id uuid not null references profiles(id) on delete cascade,
+  video_id uuid not null references videos(id) on delete cascade,
+  watched_at timestamptz not null default now(),
+  completed boolean not null default false,
+  primary key (user_id, video_id)
+);
+create index if not exists watch_events_video_idx on watch_events (video_id);
+
+alter table videos add column if not exists status text not null default 'published';
+alter table videos add column if not exists scheduled_at timestamptz;
+do $$ begin
+  alter table videos add constraint videos_status_chk check (status in ('draft','scheduled','published'));
+exception when duplicate_object then null; end $$;
+create index if not exists videos_scheduled_idx on videos (scheduled_at) where status = 'scheduled';
+create index if not exists videos_status_idx on videos (status, created_at desc);
+
+alter table reports add column if not exists message_id uuid references messages(id) on delete set null;
+alter table reports drop constraint if exists reports_target_type_chk;
+alter table reports add constraint reports_target_type_chk check (target_type in ('video','user','comment','sound','message'));

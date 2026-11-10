@@ -15,6 +15,8 @@ export async function render(el, params, ctx) {
         <input type="checkbox" role="switch" id="sPrivate" ${st.isPrivate ? 'checked' : ''} aria-label="${esc(t('privateAccount'))}"></label>
       <label class="set-row"><span class="grow"><b>${esc(t('whoComments'))}</b></span>
         <select id="sComments" aria-label="${esc(t('whoComments'))}">${['everyone', 'followers', 'nobody'].map((p) => `<option value="${p}" ${st.commentPolicy === p ? 'selected' : ''}>${esc(t('cp_' + p))}</option>`).join('')}</select></label>
+      <label class="set-row"><span class="grow"><b>${esc(t('whoMessages'))}</b><small class="muted">${esc(t('whoMessagesSub'))}</small></span>
+        <select id="sMsgs" aria-label="${esc(t('whoMessages'))}">${['everyone', 'followers', 'mutual', 'nobody'].map((p) => `<option value="${p}" ${st.messagePolicy === p ? 'selected' : ''}>${esc(t('mp_' + p))}</option>`).join('')}</select></label>
     </section>
     <section class="card set-sec"><h2>${icon('user', { size: 18 })} ${esc(t('secRequests'))} ${reqs.length ? `<span class="pill">${reqs.length}</span>` : ''}</h2>
       ${reqs.length ? `<ul class="set-list">${reqs.map((u) => urow(u, `<button class="btn sm primary" data-acc="${u.id}">${esc(t('accept'))}</button><button class="btn sm ghost" data-dec="${u.id}">${esc(t('decline'))}</button>`)).join('')}</ul>` : `<p class="muted">${esc(t('noRequests'))}</p>`}
@@ -31,7 +33,8 @@ export async function render(el, params, ctx) {
         <button class="btn primary" type="submit">${esc(t('changePassword'))}</button></form>
       <button class="btn ghost block" id="logoutAll">${icon('logout', { size: 16 })} ${esc(t('logoutAll'))}</button>
     </section>
-    <section class="card set-sec"><a class="set-row link" href="#/sounds">${icon('music', { size: 18 })}<span class="grow"><b>${esc(t('soundLibrary'))}</b></span>${icon('back', { size: 16, cls: 'flip-ltr' })}</a>
+    <section class="card set-sec"><a class="set-row link" href="#/drafts">${icon('edit', { size: 18 })}<span class="grow"><b>${esc(t('drafts'))}</b></span>${icon('back', { size: 16, cls: 'flip-ltr' })}</a>
+    <a class="set-row link" href="#/sounds">${icon('music', { size: 18 })}<span class="grow"><b>${esc(t('soundLibrary'))}</b></span>${icon('back', { size: 16, cls: 'flip-ltr' })}</a>
     <a class="set-row link" href="#/policy">${icon('store', { size: 18 })}<span class="grow"><b>سياسة تأجير المتاجر والتعاملات</b><small class="muted">كليب كات تؤجّر المتاجر فقط ولا تستلم أموال المشتريات</small></span>${icon('back', { size: 16, cls: 'flip-ltr' })}</a></section>
     <section class="card set-sec soon"><h2>${esc(t('secSoon'))}</h2><p class="muted">${esc(t('soonList'))}</p></section>
     <p class="muted center sm">© 2026 وطن النهار</p>
@@ -39,11 +42,12 @@ export async function render(el, params, ctx) {
 
   const save = async (patch, ctl) => {
     ctl.disabled = true;
-    try { const r = await api.updateSettings(patch); $('#sPrivate', el).checked = r.isPrivate; $('#sComments', el).value = r.commentPolicy; toast(t('saved_ok'), 'ok'); if (patch.isPrivate === false) ctx.rerender(); }
+    try { const r = await api.updateSettings(patch); $('#sPrivate', el).checked = r.isPrivate; $('#sComments', el).value = r.commentPolicy; if ($('#sMsgs', el)) $('#sMsgs', el).value = r.messagePolicy; toast(t('saved_ok'), 'ok'); if (patch.isPrivate === false) ctx.rerender(); }
     catch (e) { toast(e.message, 'warn'); ctx.rerender(); } finally { ctl.disabled = false; }
   };
   $('#sPrivate', el).addEventListener('change', (e) => save({ isPrivate: e.target.checked }, e.target));
   $('#sComments', el).addEventListener('change', (e) => save({ commentPolicy: e.target.value }, e.target));
+  $('#sMsgs', el).addEventListener('change', (e) => save({ messagePolicy: e.target.value }, e.target));
   el.querySelectorAll('[data-acc],[data-dec]').forEach((b) => b.addEventListener('click', async () => {
     b.disabled = true; await api.respondFollowRequest(b.dataset.acc || b.dataset.dec, !!b.dataset.acc); ctx.rerender();
   }));

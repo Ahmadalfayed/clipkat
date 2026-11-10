@@ -62,11 +62,11 @@ test('unauthenticated users cannot change data or read private endpoints', async
 
 test('settings persist and are validated', async () => {
   const a = await user('set_alice');
-  assert.deepEqual((await a.get('/me/settings')).body, { isPrivate: false, commentPolicy: 'everyone' });
+  assert.deepEqual((await a.get('/me/settings')).body, { isPrivate: false, commentPolicy: 'everyone', messagePolicy: 'everyone' });
   assert.equal((await a.patch('/me/settings', { commentPolicy: 'hackers' })).status, 400);
   assert.equal((await a.patch('/me/settings', { isPrivate: 'yes' })).status, 400);
-  assert.deepEqual((await a.patch('/me/settings', { isPrivate: true, commentPolicy: 'followers' })).body, { isPrivate: true, commentPolicy: 'followers' });
-  assert.deepEqual((await a.get('/me/settings')).body, { isPrivate: true, commentPolicy: 'followers' });
+  assert.deepEqual((await a.patch('/me/settings', { isPrivate: true, commentPolicy: 'followers', messagePolicy: 'everyone' })).body, { isPrivate: true, commentPolicy: 'followers', messagePolicy: 'everyone' });
+  assert.deepEqual((await a.get('/me/settings')).body, { isPrivate: true, commentPolicy: 'followers', messagePolicy: 'everyone' });
 });
 
 test('password change requires current password and revokes old sessions', async () => {
