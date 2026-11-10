@@ -2,14 +2,16 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import crypto from 'node:crypto';
 import path from 'node:path';
+import fs from 'node:fs';
 import { config } from './config.js';
 import { q, tx, pool } from './db.js';
 import { loadUser, requireUser, requireAdmin, setSession, clearSession } from './auth.js';
 import { HttpError, bad, isUuid, str, hashPassword, verifyPassword, safeEqual, normTags, localUrl, norm, ms } from './util.js';
-import { PROFILE_COLS, VIDEO_COLS, mapProfile, mapVideo, mapStore, mapProduct, mapRental, mapNotif, mapComment } from './mappers.js';
+import { PROFILE_COLS, VIDEO_COLS, SOUND_COLS, mapProfile, mapVideo, mapStore, mapProduct, mapRental, mapNotif, mapComment, mapSound } from './mappers.js';
 import { STORE_POLICY_VERSION } from './policy.js';
 import { visibleSql, notBlockedSql, isBlockedBetween, canSeeUserContent, COMMENT_POLICIES, REPORT_REASONS } from './privacy.js';
-import { imageUpload, videoUpload, sniffImage, sniffVideo, place, rm, rid, makePoster, dirs } from './uploads.js';
+import { imageUpload, videoUpload, audioUpload, sniffImage, sniffVideo, place, rm, rid, makePoster, dirs } from './uploads.js';
+import { sniffAudio, probe, extractAudio } from './media.js';
 import { activateRental, cancelRental, slots, notify } from './rentals.js';
 
 export const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -24,7 +26,7 @@ export function buildRouter() {
   r.use(loadUser);
 
   r.get('/health', h(async (_q, res) => { await q('select 1'); res.json({ ok: true }); }));
-  r.get('/config', (_req, res) => res.json({ maxVideoMb: config.maxVideoMb, maxImageMb: config.maxImageMb, storePolicyVersion: STORE_POLICY_VERSION }));
+  r.get('/config', (_req, res) => res.json({ maxVideoMb: config.maxVideoMb, maxImageMb: config.maxImageMb, maxSoundMb: config.maxSoundMb, maxSoundSec: config.maxSoundSec, maxVideoSec: config.maxVideoSec, storePolicyVersion: STORE_POLICY_VERSION }));
   r.get('/policy/store-rental', (_req, res) => res.json({ policy: 'store-rental', version: STORE_POLICY_VERSION }));
   // لا إيجار بدون قبول صريح لإصدار السياسة الحالي — يُسجَّل في نفس المعاملة
   const requirePolicy = (b) => { if (b?.acceptPolicy !== STORE_POLICY_VERSION) throw bad('policyRequired'); };
@@ -209,6 +211,7 @@ export function buildRouter() {
     if (savedBy) { if (uid(savedBy) !== req.user?.id) throw new HttpError(403, 'forbidden'); add('v.id in (select video_id from saves where user_id = ?)', savedBy); }
     if (likedBy) { if (uid(likedBy) !== req.user?.id) throw new HttpError(403, 'forbidden'); add('v.id in (select video_id from likes where user_id = ?)', likedBy); }
     if (productStoreId) add('v.id in (select vp.video_id from video_products vp join products pr on pr.id = vp.product_id where pr.store_id = ?)', uid(productStoreId));
+    if (req.query.soundId) add('v.sound_id = ?', uid(req.query.soundId));
     res.json(await queryVideos(req.user, w, p));
   }));
   r.get('/videos/:id', h(async (req, res) => res.json(isUuid(req.params.id) ? (await queryVideos(req.user, ['v.id = $1'], [req.params.id], 1))[0] || null : null)));
@@ -228,7 +231,16 @@ export function buildRouter() {
     try {
       if (!vf) throw bad('bad');
       const ext = sniffVideo(vf.path); if (!ext) throw bad('badFile');
-      const b = req.body || {}; const caption = str(b.caption, 300); const sound = b.sound ? str(b.sound, 80) : null;
+      const info = await probe(vf.path);
+      if (info && info.duration > config.maxVideoSec + 0.4) throw new HttpError(400, 'tooLong', { limit: config.maxVideoSec });
+      const b = req.body || {}; const caption = str(b.caption, 300);
+      let soundTitle = b.sound ? str(b.sound, 80) : null;
+      let soundId = b.soundId && isUuid(String(b.soundId)) ? String(b.soundId) : null;
+      const wantSave = b.saveSound === '1' || b.saveSound === 'true' || b.saveSound === true;
+      if (soundId) {
+        const so = await visibleSound(req, soundId);
+        soundTitle = so.title;
+      }
       let hashtags = []; try { hashtags = JSON.parse(b.hashtags || '[]'); } catch { /* ignore */ }
       let productIds = []; try { productIds = JSON.parse(b.productIds || '[]'); } catch { /* ignore */ }
       if (!Array.isArray(productIds)) productIds = [];
@@ -241,8 +253,27 @@ export function buildRouter() {
         if (await makePoster(vf.path, out)) posterUrl = place(out, 'images', me, `poster-${id}.jpg`); else rm(out);
       }
       const videoUrl = place(vf.path, 'videos', me, `${id}.${ext}`);
+      // استخراج صوت أصلي من المقطع (اختياري) — قبل المعاملة حتى لا نطول القفل
+      let extracted = null;
+      if (wantSave && !soundId) {
+        const tmpA = path.join(dirs.tmp, 'snd-' + rid());
+        const outA = await extractAudio(path.join(config.uploadDir, videoUrl.replace(/^\/uploads\/?/, '')), tmpA, { maxSec: config.maxSoundSec });
+        if (!outA) { /* ننشر المقطع حتى لو فشل الاستخراج */ }
+        else {
+          const pr = await probe(outA);
+          if (pr && pr.hasAudio && pr.duration > 0 && pr.duration <= config.maxSoundSec + 0.4) {
+            const extA = outA.endsWith('.m4a') ? 'm4a' : 'webm';
+            const sndId = crypto.randomUUID();
+            const audioUrl = place(outA, 'sounds', me, `${sndId}.${extA}`);
+            extracted = { id: sndId, url: audioUrl, durationMs: Math.max(1, Math.round((pr.duration || 0) * 1000)), title: soundTitle || str(caption, 80) || 'صوت أصلي' };
+          } else rm(outA);
+        }
+      }
       const row = await tx(async (c) => {
-        const v = (await c.query('insert into videos (id, user_id, video_path, video_url, poster_url, caption, hashtags, sound) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id', [id, me, videoUrl, videoUrl, posterUrl, caption, normTags(hashtags, caption), sound])).rows[0];
+        const sid = soundId || extracted?.id || null;
+        if (extracted) await c.query('insert into sounds (id, user_id, title, audio_url, duration_ms, source_video_id) values ($1,$2,$3,$4,$5,$6)', [extracted.id, me, extracted.title, extracted.url, extracted.durationMs, id]);
+        const v = (await c.query('insert into videos (id, user_id, video_path, video_url, poster_url, caption, hashtags, sound, sound_id) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id', [id, me, videoUrl, videoUrl, posterUrl, caption, normTags(hashtags, caption), extracted?.title || soundTitle, sid])).rows[0];
+        if (soundId) await c.query('update sounds set uses_count = uses_count + 1 where id = $1', [soundId]);
         const mine = productIds.filter(isUuid).length ? (await c.query('select pr.id from products pr join stores s on s.id = pr.store_id where s.owner_id = $1 and pr.id = any($2::uuid[])', [me, productIds.filter(isUuid)])).rows : [];
         for (const m of mine) await c.query('insert into video_products (video_id, product_id) values ($1,$2) on conflict do nothing', [id, m.id]);
         return v;
@@ -311,6 +342,85 @@ export function buildRouter() {
     if (parentAuthor && parentAuthor !== v.user_id) await notify(pool, { userId: parentAuthor, type: 'reply', fromId: req.user.id, videoId: id, text });
     res.status(201).json(mapComment(c));
   }));
+
+  // ---------------- Sounds (مكتبة الأصوات — المرحلة 2) ----------------
+  async function visibleSound(req, id) {
+    const s = need((await q('select * from sounds where id = $1 and not is_hidden', [uid(id)])).rows[0]);
+    if (!(await canSeeUserContent(req.user, s.user_id))) throw new HttpError(404, 'notfound');
+    return s;
+  }
+  r.get('/sounds', h(async (req, res) => {
+    const rows = (await q(`select ${SOUND_COLS} from sounds s where not s.is_hidden and ${visibleSql('s.user_id', '$1::uuid')} order by s.uses_count desc, s.created_at desc limit 80`, [viewerId(req)])).rows;
+    res.json(rows.map(mapSound));
+  }));
+  r.get('/sounds/:id', h(async (req, res) => {
+    if (!isUuid(req.params.id)) return res.json(null);
+    try { res.json(mapSound(await visibleSound(req, req.params.id))); }
+    catch (e) { if (e instanceof HttpError && e.status === 404) return res.json(null); throw e; }
+  }));
+  r.get('/sounds/:id/videos', h(async (req, res) => {
+    await visibleSound(req, req.params.id);
+    res.json(await queryVideos(req.user, ['v.sound_id = $1'], [req.params.id], 80));
+  }));
+  r.post('/sounds', requireUser, mkLimit(3600000, 40), audioUpload, h(async (req, res) => {
+    const f = req.file; if (!f) throw bad('bad');
+    const tmp = [f.path];
+    try {
+      if (!(sniffAudio(f.path) || sniffVideo(f.path))) throw bad('badFile');
+      const title = str(req.body?.title, 80, { min: 1 });
+      const out = await prepareSound(f.path, req.user.id, tmp);
+      const row = (await q('insert into sounds (user_id, title, audio_url, duration_ms) values ($1,$2,$3,$4) returning *', [req.user.id, title, out.url, out.durationMs])).rows[0];
+      res.status(201).json(mapSound(row));
+    } finally { tmp.forEach(rm); }
+  }));
+  // استخراج صوت من مقطع مرئي (يُنسب لصاحب المقطع، ويُعاد إن كان مستخرجاً مسبقاً)
+  r.post('/videos/:id/extract-sound', requireUser, mkLimit(3600000, 20), h(async (req, res) => {
+    const v = await visibleVideo(req, uid(req.params.id));
+    const existing = (await q('select * from sounds where source_video_id = $1 and not is_hidden', [v.id])).rows[0];
+    if (existing) {
+      if (!(await canSeeUserContent(req.user, existing.user_id))) throw new HttpError(404, 'notfound');
+      return res.json(mapSound(existing));
+    }
+    const file = path.join(config.uploadDir, (await q('select video_path from videos where id = $1', [v.id])).rows[0].video_path.replace(/^\/uploads\/?/, ''));
+    if (!fs.existsSync(file)) throw new HttpError(500, 'missingFile');
+    const tmpBase = path.join(dirs.tmp, 'snd-' + rid());
+    const outA = await extractAudio(file, tmpBase, { maxSec: config.maxSoundSec });
+    if (!outA) throw new HttpError(400, 'noAudio');
+    const pr = await probe(outA);
+    if (!pr || !pr.hasAudio || pr.duration <= 0) { rm(outA); throw new HttpError(400, 'noAudio'); }
+    if (pr.duration > config.maxSoundSec + 0.4) { rm(outA); throw new HttpError(400, 'tooLong', { limit: config.maxSoundSec }); }
+    const extA = outA.endsWith('.m4a') ? 'm4a' : 'webm';
+    const sndId = crypto.randomUUID();
+    const title = str(req.body?.title, 80) || (await q('select caption, sound from videos where id = $1', [v.id])).rows[0];
+    const name = (typeof title === 'string' && title) ? title : (title?.sound || title?.caption || 'صوت أصلي');
+    const audioUrl = place(outA, 'sounds', v.user_id, `${sndId}.${extA}`);
+    try {
+      const row = (await q('insert into sounds (id, user_id, title, audio_url, duration_ms, source_video_id) values ($1,$2,$3,$4,$5,$6) returning *', [sndId, v.user_id, str(name, 80) || 'صوت أصلي', audioUrl, Math.max(1, Math.round(pr.duration * 1000)), v.id])).rows[0];
+      await q("update videos set sound_id = coalesce(sound_id, $1), sound = coalesce(nullif(sound,''), $2) where id = $3", [row.id, row.title, v.id]);
+      res.status(201).json(mapSound(row));
+    } catch (e) {
+      if (e.code === '23505') { // سباق: أُنشئ في الوقت نفسه
+        const ex = (await q('select * from sounds where source_video_id = $1', [v.id])).rows[0];
+        return res.json(mapSound(need(ex)));
+      }
+      throw e;
+    }
+  }));
+  async function prepareSound(src, ownerId, tmpKeep) {
+    const pr = await probe(src);
+    if (!pr || !pr.hasAudio) throw bad('noAudio');
+    if (pr.duration > config.maxSoundSec + 0.4) throw new HttpError(400, 'tooLong', { limit: config.maxSoundSec });
+    if (pr.duration < 0.2) throw bad('tooShort');
+    const tmpBase = path.join(dirs.tmp, 'snd-' + rid());
+    const outA = await extractAudio(src, tmpBase);
+    if (!outA) throw bad('noAudio');
+    tmpKeep.push(outA);
+    const pr2 = await probe(outA) || pr;
+    const extA = outA.endsWith('.m4a') ? 'm4a' : 'webm';
+    const id = crypto.randomUUID();
+    const url = place(outA, 'sounds', ownerId, `${id}.${extA}`);
+    return { url, durationMs: Math.max(1, Math.round((pr2.duration || pr.duration) * 1000)) };
+  }
 
   // ---------------- Discover ----------------
   r.get('/tags/trending', h(async (req, res) => res.json((await q('select tag, count from trending_tags limit $1', [Math.min(Number(req.query.n) || 10, 50)])).rows)));
@@ -437,38 +547,40 @@ export function buildRouter() {
   // ---------------- Reports (التبليغ) ----------------
   r.post('/reports', requireUser, mkLimit(3600000, 30), h(async (req, res) => {
     const b = req.body || {};
-    const type = ['video', 'user', 'comment'].includes(b.type) ? b.type : (() => { throw bad('bad'); })();
+    const type = ['video', 'user', 'comment', 'sound'].includes(b.type) ? b.type : (() => { throw bad('bad'); })();
     const reason = REPORT_REASONS.includes(b.reason) ? b.reason : (() => { throw bad('reason'); })();
     const details = str(b.details, 500); const tid = uid(b.id);
-    let videoId = null, commentId = null, targetUser;
+    let videoId = null, commentId = null, soundIdRep = null, targetUser;
     if (type === 'video') { const v = await visibleVideo(req, tid); videoId = v.id; targetUser = v.user_id; }
     else if (type === 'comment') {
       const c = need((await q('select id, video_id, user_id from comments where id = $1', [tid])).rows[0]);
       await visibleVideo(req, c.video_id); commentId = c.id; videoId = c.video_id; targetUser = c.user_id;
-    } else { need((await q('select 1 from profiles where id = $1', [tid])).rowCount); targetUser = tid; }
+    } else if (type === 'sound') { const so = await visibleSound(req, tid); soundIdRep = so.id; targetUser = so.user_id; }
+    else { need((await q('select 1 from profiles where id = $1', [tid])).rowCount); targetUser = tid; }
     if (targetUser === req.user.id) throw bad('self');
-    const dup = await q(`select 1 from reports where reporter_id = $1 and status = 'open' and target_type = $2 and target_user_id = $3 and video_id is not distinct from $4 and comment_id is not distinct from $5`, [req.user.id, type, targetUser, videoId, commentId]);
+    const dup = await q(`select 1 from reports where reporter_id = $1 and status = 'open' and target_type = $2 and target_user_id = $3 and video_id is not distinct from $4 and comment_id is not distinct from $5 and sound_id is not distinct from $6`, [req.user.id, type, targetUser, videoId, commentId, soundIdRep]);
     if (dup.rowCount) throw new HttpError(409, 'alreadyReported');
-    await q('insert into reports (reporter_id, target_type, target_user_id, video_id, comment_id, reason, details) values ($1,$2,$3,$4,$5,$6,$7)', [req.user.id, type, targetUser, videoId, commentId, reason, details]);
+    await q('insert into reports (reporter_id, target_type, target_user_id, video_id, comment_id, sound_id, reason, details) values ($1,$2,$3,$4,$5,$6,$7,$8)', [req.user.id, type, targetUser, videoId, commentId, soundIdRep, reason, details]);
     res.status(201).json({ ok: true });
   }));
   r.get('/admin/reports', requireAdmin, h(async (req, res) => {
     const status = ['open', 'dismissed', 'actioned'].includes(req.query.status) ? req.query.status : 'open';
-    const rows = (await q(`select r.*, c.text as comment_text, v.caption as video_caption, v.poster_url, v.is_hidden as video_hidden
-      from reports r left join comments c on c.id = r.comment_id left join videos v on v.id = r.video_id
+    const rows = (await q(`select r.*, c.text as comment_text, v.caption as video_caption, v.poster_url, v.is_hidden as video_hidden, so.title as sound_title, so.is_hidden as sound_hidden
+      from reports r left join comments c on c.id = r.comment_id left join videos v on v.id = r.video_id left join sounds so on so.id = r.sound_id
       where r.status = $1 order by r.created_at desc limit 200`, [status])).rows;
     const ids = [...new Set(rows.flatMap((x) => [x.reporter_id, x.target_user_id]).filter(Boolean))];
     const users = ids.length ? (await q(`select ${PROFILE_COLS}, p.is_banned from profiles p where p.id = any($1::uuid[])`, [ids])).rows.map((u) => ({ ...mapProfile(u), banned: u.is_banned })) : [];
-    res.json({ reports: rows.map((x) => ({ id: x.id, type: x.target_type, reason: x.reason, details: x.details, status: x.status, action: x.action, reporterId: x.reporter_id, targetUserId: x.target_user_id, videoId: x.video_id, commentId: x.comment_id, commentText: x.comment_text, videoCaption: x.video_caption, poster: x.poster_url, videoHidden: x.video_hidden, createdAt: ms(x.created_at), reviewedAt: ms(x.reviewed_at) })), users });
+    res.json({ reports: rows.map((x) => ({ id: x.id, type: x.target_type, reason: x.reason, details: x.details, status: x.status, action: x.action, reporterId: x.reporter_id, targetUserId: x.target_user_id, videoId: x.video_id, commentId: x.comment_id, commentText: x.comment_text, videoCaption: x.video_caption, poster: x.poster_url, videoHidden: x.video_hidden, soundId: x.sound_id, soundTitle: x.sound_title, soundHidden: x.sound_hidden, createdAt: ms(x.created_at), reviewedAt: ms(x.reviewed_at) })), users });
   }));
   r.post('/admin/reports/:id/resolve', requireAdmin, h(async (req, res) => {
     const id = uid(req.params.id); const action = String(req.body?.action || '');
-    if (!['dismiss', 'hide_video', 'delete_comment', 'ban_user'].includes(action)) throw bad('bad');
+    if (!['dismiss', 'hide_video', 'delete_comment', 'ban_user', 'hide_sound'].includes(action)) throw bad('bad');
     const out = await tx(async (c) => {
       const rep = (await c.query("select * from reports where id = $1 and status = 'open' for update", [id])).rows[0];
       if (!rep) throw new HttpError(409, 'state');
       if (action === 'hide_video') { if (!rep.video_id) throw bad('bad'); await c.query('update videos set is_hidden = true where id = $1', [rep.video_id]); }
       if (action === 'delete_comment') { if (!rep.comment_id) throw bad('bad'); await c.query('delete from comments where id = $1', [rep.comment_id]); }
+      if (action === 'hide_sound') { if (!rep.sound_id) throw bad('bad'); await c.query('update sounds set is_hidden = true where id = $1', [rep.sound_id]); }
       if (action === 'ban_user') {
         const u = (await c.query('select is_admin from profiles where id = $1', [rep.target_user_id])).rows[0];
         if (!u || u.is_admin) throw bad('bad');

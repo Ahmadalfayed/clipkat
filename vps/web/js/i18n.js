@@ -134,6 +134,59 @@ Object.assign(en, {
   a_dismiss: 'Dismiss', a_hide_video: 'Hide clip', a_delete_comment: 'Delete comment', a_ban_user: 'Suspend account', t_video: 'Clip', t_user: 'Account', t_comment: 'Comment', removeFollower: 'Remove'
 });
 
+
+// ===== المرحلة 2: الاستوديو ومكتبة الأصوات (© 2026 وطن النهار) =====
+Object.assign(ar, {
+  studio: 'الاستوديو', studioHint: 'صوّر من الكاميرا أو اختر ملفاً، ثم قصّ وأضف نصاً أو فلترًا قبل النشر.',
+  recordCam: 'تصوير', recordCamSub: 'الكاميرا والميكروفون من المتصفح', pickHintStudio: 'MP4 أو WebM أو MOV — حتى 3 دقائق',
+  startRec: 'بدء التصوير', stopRec: 'إيقاف', flipCam: 'قلب الكاميرا', recEmpty: 'لم يُحفظ أي تصوير',
+  camDenied: 'لم يُسمح بالوصول للكاميرا أو الميكروفون. اسمح بالإذن من إعدادات المتصفح ثم حاول مرة أخرى.',
+  camMissing: 'لا توجد كاميرا على هذا الجهاز.', camBusy: 'الكاميرا مشغولة في تطبيق آخر.', camInsecure: 'التصوير يحتاج صفحة آمنة (https أو localhost).',
+  camFail: 'تعذر تشغيل الكاميرا.', camNoMic: 'تم التصوير بدون ميكروفون.',
+  noRecorderHint: 'متصفحك لا يدعم تسجيل أو تصدير الفيديو (MediaRecorder). جرّب كروم أو فَيَرفُكس، أو اختر ملفاً جاهزاً. بعض نسخ متصفح هواوي لا تدعم هذه الميزة.',
+  editClip: 'تحرير المقطع', trimRange: 'القص', speed: 'السرعة', filters: 'الفلاتر',
+  flt_none: 'بدون', flt_gray: 'رمادي', flt_contrast: 'واضح', flt_warm: 'دافئ', flt_cool: 'بارد', flt_vintage: 'قديم',
+  textOverlay: 'نص على المقطع', textPh: 'اكتب نصاً…', textColor: 'اللون', textSize: 'الحجم', textPos: 'الموضع', addText: 'إضافة نص',
+  posTop: 'أعلى', posMid: 'وسط', posBot: 'أسفل',
+  volOrig: 'صوت المقطع', volSound: 'صوت المكتبة', setCover: 'اعتماد هذه اللقطة غلافاً', coverSet: 'تم اختيار الغلاف', coverFail: 'تعذر التقاط الغلاف',
+  exportNext: 'تصدير ثم متابعة', exporting: 'جارٍ التصدير', exportFail: 'فشل التصدير. جرّب متصفحاً أحدث أو اختر ملفاً أقصر.',
+  exportHint: 'يُصدَّر المقطع غالباً بصيغة WebM داخل المتصفح (فلاتر ونصوص مدمجة في الصورة). بعض المتصفحات — ومنها نسخ من متصفح هواوي — قد لا تدعم التصدير أو التشغيل.',
+  saveAsSound: 'حفظ صوت هذا المقطع في المكتبة ليُعاد استخدامه', backEdit: 'العودة للتحرير',
+  badVideo: 'تعذر قراءة ملف الفيديو', videoTooLong: 'المقطع أطول من الحد ({n} ثانية)',
+  soundLibrary: 'مكتبة الأصوات', soundLibNote: 'الأصوات هنا يرفعها المستخدمون أو تُستخرج من مقاطعهم. لا توجد مقاطع موسيقية محفوظة الحقوق في المكتبة. بلّغ عن أي صوت مخالف.',
+  uploadSound: 'رفع صوت (ملف صوت أو مقطع لاستخراج الصوت)', soundTitle: 'اسم الصوت', soundTitlePh: 'مثال: نغمة قصيرة',
+  publishSound: 'إضافة للمكتبة', soundSaved: 'أُضيف الصوت', noSounds: 'لا أصوات بعد', noSoundsSub: 'ارفع صوتاً أو استخرجه من مقطعك.',
+  useSound: 'استخدام هذا الصوت', usingSound: 'سيُستخدم الصوت', clipsWithSound: 'مقاطع بهذا الصوت',
+  usedBy: '{n} استخدام', reportSound: 'تبليغ عن الصوت', soundHidden: 'هذا الصوت غير متاح',
+  badSound: 'ملف الصوت غير صالح', soundTooLong: 'الصوت أطول من الحد المسموح', noAudio: 'لا يوجد مسار صوتي في الملف',
+  t_sound: 'صوت', a_hide_sound: 'إخفاء الصوت'
+});
+Object.assign(en, {
+  studio: 'Studio', studioHint: 'Record from the camera or pick a file, then trim and add text or a filter before publishing.',
+  recordCam: 'Record', recordCamSub: 'Camera and microphone in the browser', pickHintStudio: 'MP4, WebM or MOV — up to 3 minutes',
+  startRec: 'Start recording', stopRec: 'Stop', flipCam: 'Flip camera', recEmpty: 'Nothing was recorded',
+  camDenied: 'Camera or microphone permission was denied. Allow it in the browser settings and try again.',
+  camMissing: 'No camera was found on this device.', camBusy: 'The camera is in use by another app.', camInsecure: 'Recording needs a secure page (https or localhost).',
+  camFail: 'Could not start the camera.', camNoMic: 'Recording without a microphone.',
+  noRecorderHint: 'Your browser cannot record or export video (MediaRecorder). Try Chrome or Firefox, or pick an existing file. Some Huawei browser builds lack this feature.',
+  editClip: 'Edit clip', trimRange: 'Trim', speed: 'Speed', filters: 'Filters',
+  flt_none: 'None', flt_gray: 'Gray', flt_contrast: 'Crisp', flt_warm: 'Warm', flt_cool: 'Cool', flt_vintage: 'Vintage',
+  textOverlay: 'On-screen text', textPh: 'Type text…', textColor: 'Color', textSize: 'Size', textPos: 'Position', addText: 'Add text',
+  posTop: 'Top', posMid: 'Middle', posBot: 'Bottom',
+  volOrig: 'Clip volume', volSound: 'Library sound volume', setCover: 'Use this frame as cover', coverSet: 'Cover saved', coverFail: 'Could not capture a cover',
+  exportNext: 'Export and continue', exporting: 'Exporting', exportFail: 'Export failed. Try a newer browser or a shorter file.',
+  exportHint: 'The clip is usually exported as WebM in the browser (filters and text are baked into the picture). Some browsers — including some Huawei builds — may not support export or playback.',
+  saveAsSound: 'Save this clip’s sound to the library so others can reuse it', backEdit: 'Back to edit',
+  badVideo: 'Could not read the video file', videoTooLong: 'The clip is longer than the limit ({n} seconds)',
+  soundLibrary: 'Sound library', soundLibNote: 'Sounds here are uploaded by users or extracted from their clips. The library does not ship copyrighted music. Report anything that should not be here.',
+  uploadSound: 'Upload a sound (audio file, or a video to extract audio from)', soundTitle: 'Sound name', soundTitlePh: 'e.g. short tone',
+  publishSound: 'Add to library', soundSaved: 'Sound added', noSounds: 'No sounds yet', noSoundsSub: 'Upload a sound or extract one from your clip.',
+  useSound: 'Use this sound', usingSound: 'Using sound', clipsWithSound: 'Clips with this sound',
+  usedBy: '{n} uses', reportSound: 'Report sound', soundHidden: 'This sound is not available',
+  badSound: 'Invalid sound file', soundTooLong: 'The sound is longer than allowed', noAudio: 'The file has no audio track',
+  t_sound: 'Sound', a_hide_sound: 'Hide sound'
+});
+
 export let lang = localStorage.getItem('ck:lang') || 'ar';
 export const brandName = () => BRAND[lang];
 

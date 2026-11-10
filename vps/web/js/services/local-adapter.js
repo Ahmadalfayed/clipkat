@@ -258,4 +258,11 @@ export class LocalAdapter {
     return { revenue, rentals: rentals.map((r) => ({ ...r, store: this._get('stores', r.storeId), owner: this._publicUser(this._get('users', r.ownerId)) })), months, byPlan,
       slots: await this.slots(), users: this.db.users.length, videos: this.db.videos.length, activeStores: this.db.stores.filter((s) => s.expiresAt > Date.now()).length };
   }
+
+  async listSounds() { return []; }
+  async getSound() { return null; }
+  async listSoundVideos() { return []; }
+  async uploadSound() { throw new Error('serverOnly'); }
+  async extractSound() { throw new Error('serverOnly'); }
+
 }

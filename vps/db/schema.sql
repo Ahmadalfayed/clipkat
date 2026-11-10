@@ -241,3 +241,28 @@ create table if not exists policy_acceptances (
 );
 create index if not exists policy_acceptances_user_idx on policy_acceptances (user_id, accepted_at desc);
 alter table rentals add column if not exists policy_version text;
+
+-- =====================================================================
+--  المرحلة 2 (الاستوديو ومكتبة الأصوات) — إضافات فقط، آمنة للتثبيتات الحالية
+-- =====================================================================
+create table if not exists sounds (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  title text not null check (char_length(title) between 1 and 80),
+  audio_url text not null,
+  duration_ms int not null check (duration_ms > 0),
+  source_video_id uuid references videos(id) on delete set null,
+  uses_count int not null default 0,
+  is_hidden boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists sounds_created_idx on sounds (created_at desc);
+create index if not exists sounds_user_idx on sounds (user_id, created_at desc);
+create unique index if not exists sounds_source_video_uidx on sounds (source_video_id) where source_video_id is not null;
+
+alter table videos add column if not exists sound_id uuid references sounds(id) on delete set null;
+create index if not exists videos_sound_idx on videos (sound_id) where sound_id is not null;
+
+alter table reports add column if not exists sound_id uuid references sounds(id) on delete set null;
+alter table reports drop constraint if exists reports_target_type_chk;
+alter table reports add constraint reports_target_type_chk check (target_type in ('video','user','comment','sound'));

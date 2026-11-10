@@ -6,7 +6,8 @@ import { icon, logoMark, toast, $, esc } from './ui.js';
 const routes = {
   feed: () => import('./views/feed.js'), following: () => import('./views/feed.js'), watch: () => import('./views/feed.js'),
   discover: () => import('./views/discover.js'), tag: () => import('./views/discover.js'),
-  upload: () => import('./views/upload.js'), inbox: () => import('./views/inbox.js'),
+  upload: () => import('./views/studio.js'), inbox: () => import('./views/inbox.js'),
+  sound: () => import('./views/sound.js'), sounds: () => import('./views/sound.js'),
   profile: () => import('./views/profile.js'), me: () => import('./views/profile.js'), login: () => import('./views/auth.js'),
   stores: () => import('./views/stores.js'), store: () => import('./views/stores.js'), rent: () => import('./views/stores.js'),
   checkout: () => import('./views/checkout.js'), dashboard: () => import('./views/dashboard.js'), admin: () => import('./views/admin.js'), settings: () => import('./views/settings.js'), policy: () => import('./views/policy.js')

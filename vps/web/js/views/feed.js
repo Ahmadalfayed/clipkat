@@ -136,11 +136,18 @@ export async function render(el, params, ctx) {
     const own = ctx.me?.id === s.v.userId;
     const sh = openSheet({ title: t('more'), body: `<div class="menu-list">
       <button class="btn block ghost" data-m="copy">${esc(t('copyLink'))}</button>
+      ${s.v.soundId ? `<a class="btn block ghost" href="#/upload?sound=${s.v.soundId}" data-m="use">${esc(t('useSound'))}</a>` : (api.social ? `<button class="btn block ghost" data-m="extract">${esc(t('useSound'))}</button>` : '')}
       ${api.social && !own ? `<button class="btn block ghost" data-m="report">${esc(t('reportVideo'))}</button><button class="btn block ghost bad" data-m="block">${esc(t('block'))} @${esc(s.user?.username)}</button>` : ''}</div>` });
     sh.body.addEventListener('click', async (e) => {
       const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return; sh.close();
       if (m === 'copy') { try { await navigator.clipboard.writeText(location.href.split('#')[0] + '#/watch/' + s.v.id); } catch {} toast(t('linkCopied')); return; }
+      if (m === 'use') return;
       if (!(await ctx.requireLogin())) return;
+      if (m === 'extract') {
+        try { const snd = await api.extractSound(s.v.id, s.v.sound || s.v.caption); ctx.navigate('#/upload?sound=' + snd.id); }
+        catch (e) { toast(t(e.message === 'noAudio' ? 'noAudio' : e.message), 'warn'); }
+        return;
+      }
       if (m === 'report') openReportSheet('video', s.v.id);
       if (m === 'block' && (await confirmBlock(s.user))) ctx.rerender();
     });
@@ -229,7 +236,7 @@ function slideHTML({ v, user, stats, products, following, store }, idx) {
     <div class="meta">
       <a class="uname" href="#/profile/${user?.id}"><bdi>@${esc(user?.username)}</bdi></a> <span class="when">· ${esc(timeAgo(v.createdAt))}</span>
       <p class="cap">${linkify(v.caption)} ${v.hashtags.filter((h) => !v.caption.includes('#' + h)).map((h) => `<a href="#/tag/${encodeURIComponent(h)}" class="htag">#${esc(h)}</a>`).join(' ')}</p>
-      <div class="sound">${icon('music', { size: 14 })}<div class="marquee"><span>${esc(v.sound || `${t('originalSound')} - ${user?.username}`)}</span></div></div>
+      <a class="sound" href="${v.soundId ? `#/sound/${v.soundId}` : '#/sounds'}">${icon('music', { size: 14 })}<div class="marquee"><span>${esc(v.sound || `${t('originalSound')} - ${user?.username}`)}</span></div></a>
       ${p ? `<button class="shop-card" data-a="products" aria-label="${esc(t('shopNow'))}: ${esc(p.name)}"><img src="${productImg(p)}" alt="" class="pimg"><span class="grow"><span class="shop-store">${icon('bag', { size: 13 })} ${esc(store?.name || '')}${store?.verified ? verifiedBadge(t('verified')) : ''}</span><b>${esc(p.name)}</b><span class="price">${esc(fmtKWD(p.price))}${products.length > 1 ? ` <em>+${products.length - 1}</em>` : ''}</span></span><span class="shop-cta">${esc(t('shopNow'))}</span></button>` : ''}
     </div>
     <div class="progress" aria-hidden="true"><i></i></div>

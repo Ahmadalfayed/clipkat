@@ -419,3 +419,32 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
 .policy article li { line-height: 1.8; margin-block: 4px; }
 .policy-title { font-size: 1.2rem; margin: 0 0 8px; }
 .policy-foot { margin-top: 18px; }
+
+/* ===== المرحلة 2: الاستوديو ومكتبة الأصوات (© 2026 وطن النهار) ===== */
+.studio-src { display: grid; gap: 12px; margin: 12px 0 18px; }
+.src-card { display: grid; gap: 4px; place-items: center; text-align: center; padding: 22px 16px; border-radius: 18px; border: 1px dashed var(--line); background: var(--surface); color: inherit; cursor: pointer; }
+.src-card b { font-size: 1.05rem; }
+.src-card small { color: var(--muted); }
+.src-card:disabled { opacity: .5; cursor: not-allowed; }
+.cam-wrap { position: relative; aspect-ratio: 9/14; max-height: 58dvh; margin: 0 auto; width: 100%; max-width: 360px; border-radius: 18px; overflow: hidden; background: #000; }
+.cam-wrap .cam { width: 100%; height: 100%; object-fit: cover; }
+.cam-hud { position: absolute; top: 10px; inset-inline: 12px; color: #fff; font-weight: 700; text-shadow: 0 1px 4px #000; }
+.studio-bar { display: flex; gap: 10px; justify-content: center; margin-top: 12px; }
+.rec-btn.recording { background: #e5484d; color: #fff; }
+.edit-prev { position: relative; aspect-ratio: 9/14; max-height: 48dvh; margin: 0 auto 12px; width: 100%; max-width: 320px; border-radius: 16px; overflow: hidden; background: #000; }
+.edit-prev .preview { width: 100%; height: 100%; object-fit: cover; }
+.text-layer { position: absolute; inset: 0; pointer-events: none; }
+.text-layer .tx { position: absolute; left: 50%; transform: translate(-50%, -50%); font-weight: 800; text-shadow: 0 1px 4px #000; pointer-events: auto; white-space: nowrap; }
+.text-layer .tx button { margin-inline-start: 6px; border: 0; background: rgba(0,0,0,.45); color: #fff; border-radius: 99px; width: 22px; height: 22px; cursor: pointer; }
+.trim { display: grid; gap: 4px; }
+.trim input[type=range] { width: 100%; }
+.text-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.text-form input[type=text], .text-form input#tx { flex: 1; min-width: 120px; padding: 6px 8px; }
+.tx-list { list-style: none; margin: 0; padding: 0; }
+.card.tight { padding: 12px; display: grid; gap: 8px; }
+.check-row { display: flex; gap: 8px; align-items: center; }
+.pub-prev img { width: 100%; max-width: 220px; margin: 0 auto 8px; display: block; border-radius: 12px; }
+.sound-list { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 8px; }
+.sound-row a { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 14px; background: var(--surface); color: inherit; text-decoration: none; }
+.sound-head audio { margin: 8px 0; }
+.row-end { display: flex; justify-content: flex-end; margin: 8px 0; }

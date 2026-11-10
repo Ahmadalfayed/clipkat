@@ -7,11 +7,13 @@ export async function render(el, params) {
   if (params.name === 'tag') {
     const tag = params.args[0] || '';
     const vids = await api.listVideos({ tag });
-    el.innerHTML = `<div class="page">${pageHead('#' + tag)}<p class="muted pad-x">${fmtNum(vids.length)} ${esc(t('videos'))}</p>${vids.length ? videoGrid(vids, { from: `?from=tag&tag=${encodeURIComponent(tag)}` }) : emptyState(t('noVideos'))}</div>`;
+    el.innerHTML = `<div class="page">${pageHead('#' + tag)}
+    <p class="row-end"><a class="btn sm" href="#/sounds">${icon('music', { size: 16 })} ${esc(t('soundLibrary'))}</a></p><p class="muted pad-x">${fmtNum(vids.length)} ${esc(t('videos'))}</p>${vids.length ? videoGrid(vids, { from: `?from=tag&tag=${encodeURIComponent(tag)}` }) : emptyState(t('noVideos'))}</div>`;
     return;
   }
   const [tags, creators, all] = await Promise.all([api.trendingTags(10), api.topCreators(8), api.listVideos()]);
   el.innerHTML = `<div class="page">${pageHead(t('discover'), { back: false })}
+    <p class="row-end"><a class="btn sm" href="#/sounds">${icon('music', { size: 16 })} ${esc(t('soundLibrary'))}</a></p>
     <form class="searchbar" role="search"><span aria-hidden="true">${icon('search', { size: 20 })}</span><input type="search" name="q" placeholder="${esc(t('searchPh'))}" aria-label="${esc(t('search'))}" value="${esc(params.query.get('q') || '')}"></form>
     <div id="results"></div>
     <div id="browse">

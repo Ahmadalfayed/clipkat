@@ -17,6 +17,9 @@ export async function createApiAdapter({ base = '', health = true } = {}) {
   const a = new ApiAdapter(base);
   const cfg = await a._req('GET', '/config');          // يرمي خطأ إن لم يكن الخادم متاحاً
   a.maxVideoMb = cfg.maxVideoMb || MAX_VIDEO_MB;
+  a.maxSoundMb = cfg.maxSoundMb || 8;
+  a.maxSoundSec = cfg.maxSoundSec || 60;
+  a.maxVideoSec = cfg.maxVideoSec || 180;
   return a;
 }
 
@@ -94,15 +97,15 @@ export class ApiAdapter {
   // ---------- Videos ----------
   _mapVideo(v) { const o = this.videos.get(v.id) || {}; Object.assign(o, v); this.videos.set(v.id, o); return o; }
   async _vids(rows) { await this._prefetchProfiles(rows.map((r) => r.userId)); return rows.map((v) => this._mapVideo(v)); }
-  async listVideos({ tab = 'foryou', userId, tag, savedBy, likedBy, productStoreId } = {}) {
-    return this._vids(await this._req('GET', '/videos' + this._qs({ tab, userId, tag, savedBy, likedBy, productStoreId })));
+  async listVideos({ tab = 'foryou', userId, tag, savedBy, likedBy, productStoreId, soundId } = {}) {
+    return this._vids(await this._req('GET', '/videos' + this._qs({ tab, userId, tag, savedBy, likedBy, productStoreId, soundId })));
   }
   async getVideo(id) {
     if (!id || !UUID_RE.test(id)) return null; if (this.videos.has(id)) return this.videos.get(id);
     const v = await this._req('GET', '/videos/' + id); return v ? (await this._vids([v]))[0] : null;
   }
   async videoURL(v) { return v.src; }
-  async createVideo({ file, poster, caption = '', hashtags = [], sound, productIds = [] }) {
+  async createVideo({ file, poster, caption = '', hashtags = [], sound, soundId, saveSound = false, productIds = [] }) {
     await this._meOrThrow();
     if (file.size > this.maxVideoMb * 1024 * 1024) { const e = new Error('tooLarge'); e.limit = this.maxVideoMb; throw e; }
     const fd = new FormData();
@@ -110,6 +113,8 @@ export class ApiAdapter {
     if (poster) fd.append('poster', dataURLToBlob(poster), 'poster.jpg');
     fd.append('caption', caption.slice(0, 300)); fd.append('hashtags', JSON.stringify(hashtags)); fd.append('productIds', JSON.stringify(productIds));
     if (sound) fd.append('sound', String(sound).slice(0, 80));
+    if (soundId) fd.append('soundId', soundId);
+    if (saveSound) fd.append('saveSound', '1');
     return (await this._vids([await this._req('POST', '/videos', undefined, { form: fd })]))[0];
   }
   async _loadMine() {
@@ -161,6 +166,18 @@ export class ApiAdapter {
   async report({ type, id, reason, details = '' }) { return this._req('POST', '/reports', { type, id, reason, details: String(details).slice(0, 500) }); }
   async adminReports(status = 'open') { const r = await this._req('GET', '/admin/reports' + this._qs({ status })); for (const u of r.users) this.profiles.set(u.id, u); return r; }
   async resolveReport(id, action) { return this._req('POST', `/admin/reports/${id}/resolve`, { action }); }
+
+  // ---------- Sounds ----------
+  async listSounds() { return this._req('GET', '/sounds'); }
+  async getSound(id) { if (!id || !UUID_RE.test(id)) return null; return this._req('GET', '/sounds/' + id); }
+  async listSoundVideos(id) { return this._vids(await this._req('GET', `/sounds/${id}/videos`)); }
+  async uploadSound({ file, title }) {
+    await this._meOrThrow();
+    if (file.size > (this.maxSoundMb || 8) * 1024 * 1024) { const e = new Error('tooLarge'); e.limit = this.maxSoundMb; throw e; }
+    const fd = new FormData(); fd.append('file', file, file.name || 'sound'); fd.append('title', String(title || '').slice(0, 80));
+    return this._req('POST', '/sounds', undefined, { form: fd });
+  }
+  async extractSound(videoId, title) { return this._req('POST', `/videos/${videoId}/extract-sound`, { title: title || '' }); }
 
   // ---------- Discover ----------
   async trendingTags(n = 10) { return this._req('GET', '/tags/trending' + this._qs({ n })); }
