@@ -1,0 +1,61 @@
+# كليب كات — Docker Compose: قاعدة بيانات PostgreSQL + التطبيق (Node.js) + Caddy (HTTPS تلقائي)
+# كل الإعدادات من ملف .env (ينشئه install.sh). لا تعدّل هذا الملف إلا إن كنت تعرف ما تفعل.
+name: clipkat
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: clipkat
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD missing - run install.sh}
+      POSTGRES_DB: clipkat
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro   # يُطبَّق تلقائياً عند أول تشغيل
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clipkat -d clipkat"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [internal]            # لا منافذ مكشوفة للعالم
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://clipkat:${DB_PASSWORD}@db:5432/clipkat
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET missing - run install.sh}
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      MAX_VIDEO_MB: ${MAX_VIDEO_MB:-100}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+    volumes:
+      - ./data/uploads:/data/uploads
+    networks: [internal]
+    expose: ["3000"]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+      MAX_BODY: ${MAX_BODY:-120MB}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy:/data
+    networks: [internal]
+
+networks:
+  internal:

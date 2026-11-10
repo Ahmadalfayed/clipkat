@@ -1,0 +1,15 @@
+# SITE_ADDRESS = اسم نطاقك (فيُفعَّل HTTPS تلقائياً من Let's Encrypt)، أو ":80" للعمل بـ HTTP على عنوان IP.
+{
+	email {$ACME_EMAIL}
+}
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+	request_body {
+		max_size {$MAX_BODY}
+	}
+	header {
+		-Server
+	}
+	reverse_proxy app:3000
+}
