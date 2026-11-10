@@ -145,6 +145,7 @@ export async function render(el, params, ctx) {
     if (a === 'comments') return openComments(s, sl);
     if (a === 'products') return openProducts(s);
     if (a === 'more') return openMore(s);
+    if (a === 'remixes') return openRemixes(s.v);
     if (!(await ctx.requireLogin())) return;
     if (a === 'like') { const on = await api.toggleLike(s.v.id); if (on) btn.classList.add('pop'); setTimeout(() => btn.classList.remove('pop'), 400); await refreshStats(s, sl); }
     if (a === 'save') { const on = await api.toggleSave(s.v.id); toast(on ? t('saved_ok') : t('removed')); await refreshStats(s, sl); }
@@ -158,20 +159,52 @@ export async function render(el, params, ctx) {
   async function share(s, sl) {
     const url = location.href.split('#')[0] + '#/watch/' + s.v.id;
     await api.recordShare(s.v.id); await refreshStats(s, sl);
+    if (api.social) {
+      const sh = openSheet({ title: t('share'), body: `<div class="menu-list">
+        ${s.v.canDuet !== false ? `<button class="btn block ghost" data-m="duet">${esc(t('duet'))}</button>` : ''}
+        ${s.v.canStitch !== false ? `<button class="btn block ghost" data-m="stitch">${esc(t('stitch'))}</button>` : ''}
+        <button class="btn block ghost" data-m="copy">${esc(t('copyLink'))}</button>
+        <button class="btn block ghost" data-m="sys">${esc(t('share'))}</button></div>` });
+      sh.body.addEventListener('click', async (e) => {
+        const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return; sh.close();
+        if (m === 'duet' || m === 'stitch') { if (await ctx.requireLogin()) ctx.navigate(`#/upload?${m}=${s.v.id}`); return; }
+        if (m === 'copy') { try { await navigator.clipboard.writeText(url); } catch {} toast(t('linkCopied')); return; }
+        if (m === 'sys') {
+          try { if (navigator.share) { await navigator.share({ title: s.v.caption, url }); return; } } catch (err) { if (err.name === 'AbortError') return; }
+          try { await navigator.clipboard.writeText(url); } catch {} toast(t('linkCopied'));
+        }
+      });
+      return;
+    }
     try { if (navigator.share) { await navigator.share({ title: s.v.caption, url }); return; } } catch (e) { if (e.name === 'AbortError') return; }
     try { await navigator.clipboard.writeText(url); } catch { /* المتصفح قد يمنع الحافظة */ }
     toast(t('linkCopied'));
   }
+  async function openRemixes(v) {
+    const rows = await api.listRemixes(v.id);
+    const body = document.createElement('div');
+    body.innerHTML = rows.length
+      ? `<ul class="remix-list">${rows.map((r) => `<li><a class="urow" href="#/watch/${r.id}"><img class="av sq" src="${esc(r.poster || '')}" alt=""><span class="grow"><b>${esc(r.remixType === 'stitch' ? t('stitch') : t('duet'))}</b><span class="muted">${esc(r.caption || '')}</span></span></a></li>`).join('')}</ul>`
+      : emptyState(t('noRemixes'));
+    openSheet({ title: t('remixes'), body });
+  }
   async function openMore(s) {
     const own = ctx.me?.id === s.v.userId;
+    const canD = api.social && s.v.canDuet !== false;
+    const canS = api.social && s.v.canStitch !== false;
     const sh = openSheet({ title: t('more'), body: `<div class="menu-list">
+      ${canD ? `<button class="btn block ghost" data-m="duet">${esc(t('duet'))}</button>` : ''}
+      ${canS ? `<button class="btn block ghost" data-m="stitch">${esc(t('stitch'))}</button>` : ''}
       <button class="btn block ghost" data-m="copy">${esc(t('copyLink'))}</button>
       ${s.v.soundId ? `<a class="btn block ghost" href="#/upload?sound=${s.v.soundId}" data-m="use">${esc(t('useSound'))}</a>` : (api.social ? `<button class="btn block ghost" data-m="extract">${esc(t('useSound'))}</button>` : '')}
-      ${api.social && !own ? `<button class="btn block ghost" data-m="report">${esc(t('reportVideo'))}</button><button class="btn block ghost bad" data-m="block">${esc(t('block'))} @${esc(s.user?.username)}</button>` : ''}</div>` });
+      ${s.v.remixCount ? `<button class="btn block ghost" data-m="remixes">${esc(t('remixes'))} (${s.v.remixCount})</button>` : ''}
+      ${api.social && !own ? `<button class="btn block ghost" data-m="report">${esc(t('reportVideo'))}</button><button class="btn block ghost bad" data-m="block">${esc(t('block'))} <bdi dir="ltr">@${esc(s.user?.username)}</bdi></button>` : ''}</div>` });
     sh.body.addEventListener('click', async (e) => {
       const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return; sh.close();
       if (m === 'copy') { try { await navigator.clipboard.writeText(location.href.split('#')[0] + '#/watch/' + s.v.id); } catch {} toast(t('linkCopied')); return; }
       if (m === 'use') return;
+      if (m === 'duet' || m === 'stitch') { if (!(await ctx.requireLogin())) return; ctx.navigate(`#/upload?${m}=${s.v.id}`); return; }
+      if (m === 'remixes') { openRemixes(s.v); return; }
       if (!(await ctx.requireLogin())) return;
       if (m === 'extract') {
         try { const snd = await api.extractSound(s.v.id, s.v.sound || s.v.caption); ctx.navigate('#/upload?sound=' + snd.id); }
@@ -265,6 +298,8 @@ function slideHTML({ v, user, stats, products, following, store }, idx) {
     </aside>
     <div class="meta">
       <a class="uname" href="#/profile/${user?.id}"><bdi>@${esc(user?.username)}</bdi></a> <span class="when">· ${esc(timeAgo(v.createdAt))}</span>
+      ${v.remixType ? (v.source?.available ? `<a class="remix-attr" href="#/watch/${v.source.id}">${esc(t(v.remixType === 'stitch' ? 'stitchWith' : 'duetWith'))} <bdi dir="ltr">@${esc(v.source.username)}</bdi></a>` : `<span class="remix-attr muted">${esc(t('sourceUnavailable'))}</span>`) : ''}
+      ${v.remixCount ? `<button class="linkbtn remix-count" data-a="remixes">${esc(t('remixes'))} (${v.remixCount})</button>` : ''}
       <p class="cap">${linkify(v.caption)} ${v.hashtags.filter((h) => !v.caption.includes('#' + h)).map((h) => `<a href="#/tag/${encodeURIComponent(h)}" class="htag">#${esc(h)}</a>`).join(' ')}</p>
       <a class="sound" href="${v.soundId ? `#/sound/${v.soundId}` : '#/sounds'}">${icon('music', { size: 14 })}<div class="marquee"><span>${esc(v.sound || `${t('originalSound')} - ${user?.username}`)}</span></div></a>
       ${p ? `<button class="shop-card" data-a="products" aria-label="${esc(t('shopNow'))}: ${esc(p.name)}"><img src="${productImg(p)}" alt="" class="pimg"><span class="grow"><span class="shop-store">${icon('bag', { size: 13 })} ${esc(store?.name || '')}${store?.verified ? verifiedBadge(t('verified')) : ''}</span><b>${esc(p.name)}</b><span class="price">${esc(fmtKWD(p.price))}${products.length > 1 ? ` <em>+${products.length - 1}</em>` : ''}</span></span><span class="shop-cta">${esc(t('shopNow'))}</span></button>` : ''}

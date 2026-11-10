@@ -17,6 +17,10 @@ export async function render(el, params, ctx) {
         <select id="sComments" aria-label="${esc(t('whoComments'))}">${['everyone', 'followers', 'nobody'].map((p) => `<option value="${p}" ${st.commentPolicy === p ? 'selected' : ''}>${esc(t('cp_' + p))}</option>`).join('')}</select></label>
       <label class="set-row"><span class="grow"><b>${esc(t('whoMessages'))}</b><small class="muted">${esc(t('whoMessagesSub'))}</small></span>
         <select id="sMsgs" aria-label="${esc(t('whoMessages'))}">${['everyone', 'followers', 'mutual', 'nobody'].map((p) => `<option value="${p}" ${st.messagePolicy === p ? 'selected' : ''}>${esc(t('mp_' + p))}</option>`).join('')}</select></label>
+      <label class="set-row"><span class="grow"><b>${esc(t('allowDuet'))}</b><small class="muted">${esc(t('allowDuetSub'))}</small></span>
+        <input type="checkbox" role="switch" id="sDuet" ${st.allowDuet !== false ? 'checked' : ''} aria-label="${esc(t('allowDuet'))}"></label>
+      <label class="set-row"><span class="grow"><b>${esc(t('allowStitch'))}</b><small class="muted">${esc(t('allowStitchSub'))}</small></span>
+        <input type="checkbox" role="switch" id="sStitch" ${st.allowStitch !== false ? 'checked' : ''} aria-label="${esc(t('allowStitch'))}"></label>
     </section>
     <section class="card set-sec"><h2>${icon('user', { size: 18 })} ${esc(t('secRequests'))} ${reqs.length ? `<span class="pill">${reqs.length}</span>` : ''}</h2>
       ${reqs.length ? `<ul class="set-list">${reqs.map((u) => urow(u, `<button class="btn sm primary" data-acc="${u.id}">${esc(t('accept'))}</button><button class="btn sm ghost" data-dec="${u.id}">${esc(t('decline'))}</button>`)).join('')}</ul>` : `<p class="muted">${esc(t('noRequests'))}</p>`}
@@ -42,12 +46,14 @@ export async function render(el, params, ctx) {
 
   const save = async (patch, ctl) => {
     ctl.disabled = true;
-    try { const r = await api.updateSettings(patch); $('#sPrivate', el).checked = r.isPrivate; $('#sComments', el).value = r.commentPolicy; if ($('#sMsgs', el)) $('#sMsgs', el).value = r.messagePolicy; toast(t('saved_ok'), 'ok'); if (patch.isPrivate === false) ctx.rerender(); }
+    try { const r = await api.updateSettings(patch); $('#sPrivate', el).checked = r.isPrivate; $('#sComments', el).value = r.commentPolicy; if ($('#sMsgs', el)) $('#sMsgs', el).value = r.messagePolicy; if ($('#sDuet', el)) $('#sDuet', el).checked = r.allowDuet !== false; if ($('#sStitch', el)) $('#sStitch', el).checked = r.allowStitch !== false; toast(t('saved_ok'), 'ok'); if (patch.isPrivate === false) ctx.rerender(); }
     catch (e) { toast(e.message, 'warn'); ctx.rerender(); } finally { ctl.disabled = false; }
   };
   $('#sPrivate', el).addEventListener('change', (e) => save({ isPrivate: e.target.checked }, e.target));
   $('#sComments', el).addEventListener('change', (e) => save({ commentPolicy: e.target.value }, e.target));
   $('#sMsgs', el).addEventListener('change', (e) => save({ messagePolicy: e.target.value }, e.target));
+  $('#sDuet', el).addEventListener('change', (e) => save({ allowDuet: e.target.checked }, e.target));
+  $('#sStitch', el).addEventListener('change', (e) => save({ allowStitch: e.target.checked }, e.target));
   el.querySelectorAll('[data-acc],[data-dec]').forEach((b) => b.addEventListener('click', async () => {
     b.disabled = true; await api.respondFollowRequest(b.dataset.acc || b.dataset.dec, !!b.dataset.acc); ctx.rerender();
   }));

@@ -3,7 +3,7 @@ import { api } from '../services/index.js';
 import { t, fmtKWD } from '../i18n.js';
 import { icon, esc, $, $$, toast, productImg } from '../ui.js';
 import { pageHead } from './common.js';
-import { FILTERS, SPEEDS, recorderSupported, pickRecorderMime, exportClip, captureFrame, blobToFile } from '../studio-export.js';
+import { FILTERS, SPEEDS, recorderSupported, pickRecorderMime, exportClip, exportDuet, exportStitch, captureFrame, blobToFile } from '../studio-export.js';
 
 const MAX_REC = 60;
 
@@ -16,10 +16,23 @@ export async function render(el, params, ctx) {
   const sound = soundId && api.social ? await api.getSound(soundId) : null;
   if (soundId && !sound) toast(t('soundHidden'), 'warn');
 
+  const duetId = params.query.get('duet');
+  const stitchId = params.query.get('stitch');
+  const remixType = duetId ? 'duet' : stitchId ? 'stitch' : null;
+  let remixSrc = null;
+  if (remixType && api.social) {
+    remixSrc = await api.getVideo(duetId || stitchId);
+    const allowed = remixType === 'duet' ? remixSrc?.canDuet : remixSrc?.canStitch;
+    if (!remixSrc || allowed === false) { toast(t(remixSrc ? 'remixOff' : 'sourceUnavailable'), 'warn'); ctx.navigate('#/feed'); return; }
+    remixSrc.user = await api.getUser(remixSrc.userId);
+  }
+
   const st = {
-    step: 'source', file: null, url: null, recUrl: null, stream: null, rec: null, recTimer: null,
+    step: remixType === 'stitch' ? 'stitchTrim' : 'source', file: null, url: null, recUrl: null, stream: null, rec: null, recTimer: null,
     start: 0, end: 0, speed: 1, filter: 'none', texts: [], cover: 0, poster: null,
-    volOrig: sound ? 0.2 : 1, volSound: sound ? 1 : 0, exported: null, recSec: 0, facing: 'user'
+    volOrig: sound ? 0.2 : 1, volSound: sound ? 1 : 0, volSource: 1, volMe: 1,
+    exported: null, recSec: 0, facing: 'user',
+    layout: 'lr', sourceSide: 'right', stitchStart: 0, stitchEnd: 5
   };
 
   const cleanupMedia = () => {
@@ -67,10 +80,56 @@ export async function render(el, params, ctx) {
     return true;
   }
 
+  const layoutChips = () => st.layout === 'tb'
+    ? `<button type="button" class="chip ${st.layout === 'lr' ? 'on' : ''}" data-lay="lr">${esc(t('layoutLR'))}</button>
+       <button type="button" class="chip on" data-lay="tb">${esc(t('layoutTB'))}</button>
+       <button type="button" class="chip ${st.sourceSide === 'top' ? 'on' : ''}" data-side="top">${esc(t('sourceTop'))}</button>
+       <button type="button" class="chip ${st.sourceSide === 'bottom' ? 'on' : ''}" data-side="bottom">${esc(t('sourceBottom'))}</button>`
+    : `<button type="button" class="chip on" data-lay="lr">${esc(t('layoutLR'))}</button>
+       <button type="button" class="chip ${st.layout === 'tb' ? 'on' : ''}" data-lay="tb">${esc(t('layoutTB'))}</button>
+       <button type="button" class="chip ${st.sourceSide === 'right' ? 'on' : ''}" data-side="right">${esc(t('sourceRight'))}</button>
+       <button type="button" class="chip ${st.sourceSide === 'left' ? 'on' : ''}" data-side="left">${esc(t('sourceLeft'))}</button>`;
+  const bindLayoutChips = (root) => {
+    root.querySelectorAll('[data-lay]').forEach((b) => b.addEventListener('click', async () => {
+      st.layout = b.dataset.lay; st.sourceSide = st.layout === 'tb' ? (st.sourceSide === 'bottom' ? 'bottom' : 'top') : (st.sourceSide === 'left' ? 'left' : 'right');
+      await draw();
+    }));
+    root.querySelectorAll('[data-side]').forEach((b) => b.addEventListener('click', async () => { st.sourceSide = b.dataset.side; await draw(); }));
+  };
+
   async function draw() {
     const canRec = recorderSupported();
+    if (st.step === 'stitchTrim' && remixSrc) {
+      const srcUrl = remixSrc.src || remixSrc.videoUrl || '';
+      el.innerHTML = `<div class="page studio">${pageHead(t('stitch'))}
+        <p class="muted sm">${esc(t('stitchPick'))}</p>
+        <div class="edit-prev"><video class="preview" playsinline controls src="${esc(srcUrl)}"></video></div>
+        <label class="field"><span>${esc(t('stitchRange'))}: <b id="stLbl">0.0ث — 5.0ث</b></span>
+          <div class="trim"><input type="range" id="s0" min="0" max="5" step="0.05" value="0"><input type="range" id="s1" min="0" max="5" step="0.05" value="5"></div></label>
+        <button class="btn primary block lg" id="stitchGo">${esc(t('stitchThenRecord'))}</button>
+      </div>`;
+      const v = $('video', el);
+      const clamp = () => {
+        const dur = v.duration || 5;
+        const maxWin = Math.min(5, dur);
+        $('#s0', el).max = $('#s1', el).max = String(dur);
+        let a = Number($('#s0', el).value), b = Number($('#s1', el).value);
+        if (b - a > maxWin) { if (document.activeElement === $('#s1', el)) a = b - maxWin; else b = a + maxWin; }
+        if (b < a + 0.15) b = Math.min(dur, a + 0.15);
+        st.stitchStart = Math.max(0, a); st.stitchEnd = Math.min(dur, b);
+        $('#s0', el).value = st.stitchStart; $('#s1', el).value = st.stitchEnd;
+        $('#stLbl', el).textContent = `${st.stitchStart.toFixed(1)}ث — ${st.stitchEnd.toFixed(1)}ث`;
+      };
+      v.addEventListener('loadedmetadata', () => { st.stitchEnd = Math.min(5, v.duration || 5); $('#s1', el).value = st.stitchEnd; clamp(); });
+      $('#s0', el).addEventListener('input', clamp); $('#s1', el).addEventListener('input', clamp);
+      v.addEventListener('timeupdate', () => { if (v.currentTime < st.stitchStart || v.currentTime > st.stitchEnd) v.currentTime = st.stitchStart; });
+      $('#stitchGo', el).addEventListener('click', async () => { st.step = 'source'; await draw(); });
+      return;
+    }
+
     if (st.step === 'source') {
-      el.innerHTML = `<div class="page studio">${pageHead(t('studio'))}
+      el.innerHTML = `<div class="page studio">${pageHead(remixType === 'duet' ? t('duet') : remixType === 'stitch' ? t('stitch') : t('studio'))}
+        ${remixSrc ? `<div class="note">${esc(remixType === 'duet' ? t('duetHint') : t('stitchHint'))} <bdi>@${esc((remixSrc.user && remixSrc.user.username) || '')}</bdi></div>` : ''}
         ${sound ? `<div class="note">${icon('music', { size: 16 })} ${esc(t('usingSound'))}: <a href="#/sound/${sound.id}">${esc(sound.title)}</a></div>` : ''}
         <p class="muted sm">${esc(t('studioHint'))}</p>
         ${!canRec ? `<div class="warn">${esc(t('noRecorderHint'))}</div>` : ''}
@@ -89,15 +148,22 @@ export async function render(el, params, ctx) {
     }
 
     if (st.step === 'camera') {
+      const srcUrl = remixSrc ? (remixSrc.src || '') : '';
+      const duetCam = remixType === 'duet' && srcUrl;
       el.innerHTML = `<div class="page studio">${pageHead(t('recordCam'))}
-        <div class="cam-wrap"><video class="cam" playsinline muted autoplay></video>
-          <div class="cam-hud"><span id="recTime">0:00</span></div></div>
+        ${duetCam ? `<div class="duet-stage ${st.layout} src-${st.sourceSide}"><video class="duet-src" playsinline muted autoplay loop src="${esc(srcUrl)}"></video><video class="cam" playsinline muted autoplay></video></div>
+          <div class="chips" role="group">${layoutChips()}</div>` : `<div class="cam-wrap"><video class="cam" playsinline muted autoplay></video>
+          <div class="cam-hud"><span id="recTime">0:00</span></div></div>`}
+        <div class="cam-hud"><span id="recTime">0:00</span></div>
         <div class="studio-bar">
           <button class="btn" id="flip">${esc(t('flipCam'))}</button>
           <button class="btn primary rec-btn" id="rec">${esc(t('startRec'))}</button>
         </div></div>`;
       const preview = $('.cam', el);
       if (!(await startCamera(preview))) { st.step = 'source'; await draw(); return; }
+      bindLayoutChips(el);
+      const srcVid = $('.duet-src', el);
+      if (srcVid) srcVid.play().catch(() => {});
       $('#flip', el).addEventListener('click', async () => { st.facing = st.facing === 'user' ? 'environment' : 'user'; await startCamera(preview); });
       $('#rec', el).addEventListener('click', async () => {
         const btn = $('#rec', el);
@@ -128,10 +194,11 @@ export async function render(el, params, ctx) {
     if (st.step === 'edit') {
       const durLabel = (x) => `${x.toFixed(1)}ث`;
       el.innerHTML = `<div class="page studio">${pageHead(t('editClip'))}
-        <div class="edit-prev">
+        ${remixType === 'duet' && remixSrc ? `<div class="duet-stage ${st.layout} src-${st.sourceSide}"><video class="duet-src" playsinline muted loop src="${esc(remixSrc.src || '')}"></video><video class="preview" playsinline controls src="${esc(st.url)}"></video></div>
+          <div class="chips" role="group">${layoutChips()}</div>` : `<div class="edit-prev">
           <video class="preview" playsinline controls src="${esc(st.url)}"></video>
           <div class="text-layer" id="textLayer"></div>
-        </div>
+        </div>`}
         <label class="field"><span>${esc(t('trimRange'))}: <b id="trimLbl">${durLabel(st.start)} — ${durLabel(st.end)}</b></span>
           <div class="trim"><input type="range" id="t0" min="0" max="${st.end || 1}" step="0.05" value="${st.start}"><input type="range" id="t1" min="0" max="${st.end || 1}" step="0.05" value="${st.end}"></div></label>
         <div class="chips" role="group" aria-label="${esc(t('speed'))}">${SPEEDS.map((s) => `<button type="button" class="chip ${st.speed === s ? 'on' : ''}" data-sp="${s}">${s}×</button>`).join('')}</div>
@@ -144,7 +211,10 @@ export async function render(el, params, ctx) {
             <button type="button" class="btn sm" id="txAdd">${esc(t('addText'))}</button></div>
           <ul class="tx-list" id="txList"></ul>
         </section>
-        ${sound ? `<section class="card tight"><h3>${icon('music', { size: 16 })} ${esc(sound.title)}</h3>
+        ${remixSrc ? `<section class="card tight"><h3>${esc(t('audioMix'))}</h3>
+          <label class="field"><span>${esc(t('volSource'))}</span><input type="range" id="vsrc" min="0" max="1" step="0.05" value="${st.volSource}"></label>
+          <label class="field"><span>${esc(t('volMe'))}</span><input type="range" id="vme" min="0" max="1" step="0.05" value="${st.volMe}"></label>
+        </section>` : sound ? `<section class="card tight"><h3>${icon('music', { size: 16 })} ${esc(sound.title)}</h3>
           <label class="field"><span>${esc(t('volOrig'))}</span><input type="range" id="vo" min="0" max="1" step="0.05" value="${st.volOrig}"></label>
           <label class="field"><span>${esc(t('volSound'))}</span><input type="range" id="vs" min="0" max="1" step="0.05" value="${st.volSound}"></label>
         </section>` : ''}
@@ -179,15 +249,25 @@ export async function render(el, params, ctx) {
       $('#textLayer', el).addEventListener('click', (e) => { const i = e.target.dataset.rm; if (i != null) { st.texts.splice(+i, 1); renderTexts(); } });
       $('#vo', el)?.addEventListener('input', (e) => { st.volOrig = Number(e.target.value); });
       $('#vs', el)?.addEventListener('input', (e) => { st.volSound = Number(e.target.value); });
+      $('#vsrc', el)?.addEventListener('input', (e) => { st.volSource = Number(e.target.value); });
+      $('#vme', el)?.addEventListener('input', (e) => { st.volMe = Number(e.target.value); });
+      bindLayoutChips(el);
+      const srcVid = $('.duet-src', el);
+      if (srcVid) srcVid.play().catch(() => {});
       $('#setCover', el).addEventListener('click', async () => { st.cover = v.currentTime || st.start; try { st.poster = await captureFrame(v, st.cover, { filter: st.filter, texts: st.texts }); toast(t('coverSet'), 'ok'); } catch { toast(t('coverFail'), 'warn'); } });
       $('#goExport', el).addEventListener('click', async () => {
         const btn = $('#goExport', el); btn.disabled = true; btn.textContent = t('exporting');
         try {
           if (!st.poster) try { st.poster = await captureFrame(v, st.cover || (st.start + st.end) / 2, { filter: st.filter, texts: st.texts }); } catch {}
-          const out = await exportClip({
+          const onP = (p) => { btn.textContent = `${t('exporting')} ${Math.round(p * 100)}٪`; };
+          const out = remixType === 'duet' && remixSrc
+            ? await exportDuet({ sourceUrl: remixSrc.src, userUrl: st.url, layout: st.layout, sourceSide: st.sourceSide, userStart: st.start, userEnd: st.end, speed: st.speed, filter: st.filter, texts: st.texts, coverTime: st.cover, volSource: st.volSource, volUser: st.volMe }, onP)
+            : remixType === 'stitch' && remixSrc
+            ? await exportStitch({ sourceUrl: remixSrc.src, userUrl: st.url, stitchStart: st.stitchStart, stitchEnd: st.stitchEnd, userStart: st.start, userEnd: st.end, speed: st.speed, filter: st.filter, texts: st.texts, coverTime: st.cover, volSource: st.volSource, volUser: st.volMe }, onP)
+            : await exportClip({
             sourceUrl: st.url, start: st.start, end: st.end, speed: st.speed, filter: st.filter, texts: st.texts,
             coverTime: st.cover, soundUrl: sound?.src || null, volOrig: st.volOrig, volSound: st.volSound
-          }, (p) => { btn.textContent = `${t('exporting')} ${Math.round(p * 100)}٪`; });
+          }, onP);
           st.exported = out; st.poster = out.poster || st.poster;
           st.step = 'publish'; await draw();
         } catch (e) {
@@ -233,6 +313,7 @@ export async function render(el, params, ctx) {
           sound: sound?.title || null, soundId: sound?.id || null, saveSound: !sound && fd.get('saveSound') === '1',
           productIds: $$('input[name=products]:checked', el).map((i) => i.value)
         };
+        if (remixType && remixSrc) { payload.sourceClipId = remixSrc.id; payload.remixType = remixType; }
         if (when === 'draft') payload.status = 'draft';
         if (when === 'schedule') { payload.status = 'scheduled'; payload.scheduledAt = new Date(fd.get('scheduledAt')).toISOString(); if (!fd.get('scheduledAt') || Number.isNaN(+new Date(fd.get('scheduledAt')))) { toast(t('scheduleNeed'), 'warn'); btn.disabled = false; btn.textContent = t('publish'); return; } }
         const v = await api.createVideo(payload);

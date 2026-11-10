@@ -494,3 +494,21 @@ bdi[dir="ltr"] { direction: ltr; unicode-bidi: isolate; }
 .policy-meta, .policy-ver { color: var(--muted); font-size: 13.5px; }
 .policy-code { direction: ltr; unicode-bidi: isolate; display: block; margin: 2px 0 12px; padding: 8px 12px; border-radius: 10px; background: var(--surface2); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: normal; word-break: keep-all; text-align: start; }
 .policy-intro { margin: 8px 0 12px; }
+
+/* المرحلة 4: ديويتو وستيتش */
+.duet-stage { display: grid; direction: ltr; width: 100%; max-height: 64vh; aspect-ratio: 9/16; background: #000; border-radius: 16px; overflow: hidden; }
+.duet-stage.lr { grid-template-columns: 1fr 1fr; }
+.duet-stage.tb { grid-template-rows: 1fr 1fr; }
+.duet-stage.lr.src-left { grid-template-areas: "src me"; grid-template-columns: 1fr 1fr; }
+.duet-stage.lr.src-right { grid-template-areas: "me src"; grid-template-columns: 1fr 1fr; }
+.duet-stage.tb.src-top { grid-template-areas: "src" "me"; grid-template-rows: 1fr 1fr; }
+.duet-stage.tb.src-bottom { grid-template-areas: "me" "src"; grid-template-rows: 1fr 1fr; }
+.duet-stage .duet-src { grid-area: src; width: 100%; height: 100%; object-fit: cover; background: #111; }
+.duet-stage .cam, .duet-stage .preview { grid-area: me; width: 100%; height: 100%; object-fit: cover; }
+.remix-attr { display: block; margin: 4px 0 0; font-size: 13px; font-weight: 700; color: #fff; opacity: .92; text-decoration: none; }
+.remix-attr.muted { opacity: .7; font-weight: 600; }
+.remix-count { display: block; margin: 2px 0 4px; color: #fff; opacity: .85; }
+.remix-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cam-hud { text-align: center; margin-top: 6px; font-weight: 800; }
+.studio .chips { flex-wrap: wrap; }
+

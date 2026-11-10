@@ -327,3 +327,19 @@ create index if not exists videos_status_idx on videos (status, created_at desc)
 alter table reports add column if not exists message_id uuid references messages(id) on delete set null;
 alter table reports drop constraint if exists reports_target_type_chk;
 alter table reports add constraint reports_target_type_chk check (target_type in ('video','user','comment','sound','message'));
+
+-- =====================================================================
+--  المرحلة 4 (ديويتو وستيتش) — إضافات فقط
+-- =====================================================================
+alter table profiles add column if not exists allow_duet boolean not null default true;
+alter table profiles add column if not exists allow_stitch boolean not null default true;
+
+alter table videos add column if not exists source_clip_id uuid references videos(id) on delete set null;
+alter table videos add column if not exists remix_type text;
+do $$ begin
+  alter table videos add constraint videos_remix_type_chk check (remix_type is null or remix_type in ('duet','stitch'));
+exception when duplicate_object then null; end $$;
+create index if not exists videos_source_clip_idx on videos (source_clip_id, created_at desc) where source_clip_id is not null;
+
+alter table notifications drop constraint if exists notifications_type_check;
+alter table notifications add constraint notifications_type_check check (type in ('like','comment','follow','system','follow_request','follow_accept','reply','remix'));

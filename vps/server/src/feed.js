@@ -2,6 +2,7 @@
 import { q } from './db.js';
 import { VIDEO_COLS, mapVideo } from './mappers.js';
 import { visibleSql } from './privacy.js';
+import { enrichRemix } from './remix.js';
 import { isUuid } from './util.js';
 
 export function parseCursor(raw) {
@@ -74,5 +75,5 @@ export async function forYou({ viewer, cursor = null, limit = 8, excludeSeen = t
   const hasMore = rows.length > n;
   const page = hasMore ? rows.slice(0, n) : rows;
   const last = page[page.length - 1];
-  return { videos: page.map((r) => mapVideo(r)), cursor: last ? makeCursor(last.id) : null, hasMore };
+  return { videos: await enrichRemix(page.map((r) => mapVideo(r)), viewer), cursor: last ? makeCursor(last.id) : null, hasMore };
 }

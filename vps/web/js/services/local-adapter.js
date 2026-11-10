@@ -276,5 +276,6 @@ export class LocalAdapter {
   async updateVideo() { throw new Error('serverOnly'); }
   async deleteVideo() { throw new Error('serverOnly'); }
   async unreadBreakdown() { return { count: 0, notifications: 0, messages: 0 }; }
+  async listRemixes() { return []; }
 
 }

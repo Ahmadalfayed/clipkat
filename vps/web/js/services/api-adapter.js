@@ -108,7 +108,7 @@ export class ApiAdapter {
     const v = await this._req('GET', '/videos/' + id); return v ? (await this._vids([v]))[0] : null;
   }
   async videoURL(v) { return v.src; }
-  async createVideo({ file, poster, caption = '', hashtags = [], sound, soundId, saveSound = false, productIds = [], status, scheduledAt } = {}) {
+  async createVideo({ file, poster, caption = '', hashtags = [], sound, soundId, saveSound = false, productIds = [], status, scheduledAt, sourceClipId, remixType } = {}) {
     await this._meOrThrow();
     if (file.size > this.maxVideoMb * 1024 * 1024) { const e = new Error('tooLarge'); e.limit = this.maxVideoMb; throw e; }
     const fd = new FormData();
@@ -120,6 +120,8 @@ export class ApiAdapter {
     if (saveSound) fd.append('saveSound', '1');
     if (status) fd.append('status', status);
     if (scheduledAt) fd.append('scheduledAt', scheduledAt);
+    if (sourceClipId) fd.append('sourceClipId', sourceClipId);
+    if (remixType) fd.append('remixType', remixType);
     return (await this._vids([await this._req('POST', '/videos', undefined, { form: fd })]))[0];
   }
   async _loadMine() {
@@ -248,6 +250,7 @@ export class ApiAdapter {
   async deleteMessage(id) { return this._req('DELETE', '/messages/' + id); }
   async recordWatch(id, { completed = false } = {}) { try { await this._req('POST', `/videos/${id}/watch`, { completed }); } catch {} }
   async listDrafts() { return this._vids(await this._req('GET', '/me/drafts')); }
+  async listRemixes(id) { return this._vids(await this._req('GET', `/videos/${id}/remixes`)); }
   async updateVideo(id, body) { const v = await this._req('PATCH', '/videos/' + id, body); return v ? this._mapVideo(v) : v; }
   async deleteVideo(id) { return this._req('DELETE', '/videos/' + id); }
 

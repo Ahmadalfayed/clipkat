@@ -10,6 +10,7 @@ import { HttpError, bad, isUuid, str, hashPassword, verifyPassword, safeEqual, n
 import { PROFILE_COLS, VIDEO_COLS, SOUND_COLS, mapProfile, mapVideo, mapStore, mapProduct, mapRental, mapNotif, mapComment, mapSound } from './mappers.js';
 import { STORE_POLICY_VERSION } from './policy.js';
 import { visibleSql, notBlockedSql, isBlockedBetween, canSeeUserContent, COMMENT_POLICIES, MESSAGE_POLICIES, REPORT_REASONS } from './privacy.js';
+import { assertCanRemix, enrichRemix, notifyRemix } from './remix.js';
 import { forYou, parseCursor } from './feed.js';
 import { publishDue } from './publisher.js';
 import { imageUpload, videoUpload, audioUpload, sniffImage, sniffVideo, place, rm, rid, makePoster, dirs } from './uploads.js';
@@ -150,13 +151,15 @@ export function buildRouter() {
   r.delete('/me/followers/:id', requireUser, h(async (req, res) => { await q('delete from follows where follower_id = $1 and followee_id = $2', [uid(req.params.id), req.user.id]); res.json({ ok: true }); }));
 
   // ---------------- Settings ----------------
-  const settingsOf = async (id) => { const r0 = (await q('select is_private, comment_policy, message_policy from profiles where id = $1', [id])).rows[0]; return { isPrivate: r0.is_private, commentPolicy: r0.comment_policy, messagePolicy: r0.message_policy }; };
+  const settingsOf = async (id) => { const r0 = (await q('select is_private, comment_policy, message_policy, allow_duet, allow_stitch from profiles where id = $1', [id])).rows[0]; return { isPrivate: r0.is_private, commentPolicy: r0.comment_policy, messagePolicy: r0.message_policy, allowDuet: !!r0.allow_duet, allowStitch: !!r0.allow_stitch }; };
   r.get('/me/settings', requireUser, h(async (req, res) => res.json(await settingsOf(req.user.id))));
   r.patch('/me/settings', requireUser, h(async (req, res) => {
     const b = req.body || {};
     if (b.isPrivate !== undefined && typeof b.isPrivate !== 'boolean') throw bad('bad');
     if (b.commentPolicy !== undefined && !COMMENT_POLICIES.includes(b.commentPolicy)) throw bad('bad');
     if (b.messagePolicy !== undefined && !MESSAGE_POLICIES.includes(b.messagePolicy)) throw bad('bad');
+    if (b.allowDuet !== undefined && typeof b.allowDuet !== 'boolean') throw bad('bad');
+    if (b.allowStitch !== undefined && typeof b.allowStitch !== 'boolean') throw bad('bad');
     await tx(async (c) => {
       if (b.isPrivate !== undefined) {
         await c.query('update profiles set is_private = $1 where id = $2', [b.isPrivate, req.user.id]);
@@ -167,6 +170,8 @@ export function buildRouter() {
       }
       if (b.commentPolicy !== undefined) await c.query('update profiles set comment_policy = $1 where id = $2', [b.commentPolicy, req.user.id]);
       if (b.messagePolicy !== undefined) await c.query('update profiles set message_policy = $1 where id = $2', [b.messagePolicy, req.user.id]);
+      if (b.allowDuet !== undefined) await c.query('update profiles set allow_duet = $1 where id = $2', [b.allowDuet, req.user.id]);
+      if (b.allowStitch !== undefined) await c.query('update profiles set allow_stitch = $1 where id = $2', [b.allowStitch, req.user.id]);
     });
     res.json(await settingsOf(req.user.id));
   }));
@@ -205,7 +210,7 @@ export function buildRouter() {
     if (!opts.includeUnpublished) where.push(`v.status = 'published'`);
     else if (!viewer?.is_admin) { params.push(viewer?.id || null); where.push(`(v.status = 'published' or v.user_id = $${params.length})`); }
     const sql = `select ${VIDEO_COLS} from videos v where not v.is_hidden ${where.length ? 'and ' + where.join(' and ') : ''} order by v.created_at desc limit ${limit}`;
-    return (await q(sql, params)).rows.map(mapVideo);
+    return enrichRemix((await q(sql, params)).rows.map(mapVideo), viewer);
   }
   r.get('/videos', h(async (req, res) => {
     const { tab, userId, tag, savedBy, likedBy, productStoreId } = req.query; const w = []; const p = [];
@@ -238,6 +243,12 @@ export function buildRouter() {
       return res.json({ videos: page, cursor: last ? `${last.createdAt}_${last.id}` : null, hasMore });
     }
     res.json(await queryVideos(req.user, w, p));
+  }));
+  r.get('/videos/:id/remixes', h(async (req, res) => {
+    const id = uid(req.params.id);
+    await visibleVideo(req, id);
+    const limit = Math.max(1, Math.min(Number(req.query.limit) || 30, 60));
+    res.json(await queryVideos(req.user, ['v.source_clip_id = $1'], [id], limit));
   }));
   r.get('/videos/:id', h(async (req, res) => res.json(isUuid(req.params.id) ? (await queryVideos(req.user, ['v.id = $1'], [req.params.id], 1, { includeUnpublished: true }))[0] || null : null)));
   r.get('/me/interactions', requireUser, h(async (req, res) => {
@@ -272,6 +283,10 @@ export function buildRouter() {
         if (+t < soon || +t > max) throw bad('schedule');
         scheduledAt = t;
       }
+      const remixType = (b.remixType === 'duet' || b.remixType === 'stitch') ? b.remixType : null;
+      const sourceClipId = (b.sourceClipId || b.source_clip_id) && isUuid(String(b.sourceClipId || b.source_clip_id)) ? String(b.sourceClipId || b.source_clip_id) : null;
+      if ((remixType && !sourceClipId) || (sourceClipId && !remixType)) throw bad('bad');
+      if (sourceClipId) await assertCanRemix(req.user, sourceClipId, remixType);
       if (soundId) {
         const so = await visibleSound(req, soundId);
         soundTitle = so.title;
@@ -307,12 +322,13 @@ export function buildRouter() {
       const row = await tx(async (c) => {
         const sid = soundId || extracted?.id || null;
         if (extracted) await c.query('insert into sounds (id, user_id, title, audio_url, duration_ms, source_video_id) values ($1,$2,$3,$4,$5,$6)', [extracted.id, me, extracted.title, extracted.url, extracted.durationMs, id]);
-        const v = (await c.query('insert into videos (id, user_id, video_path, video_url, poster_url, caption, hashtags, sound, sound_id, status, scheduled_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning id', [id, me, videoUrl, videoUrl, posterUrl, caption, normTags(hashtags, caption), extracted?.title || soundTitle, sid, status, scheduledAt])).rows[0];
+        const v = (await c.query('insert into videos (id, user_id, video_path, video_url, poster_url, caption, hashtags, sound, sound_id, status, scheduled_at, source_clip_id, remix_type) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning id, user_id, source_clip_id, remix_type, status', [id, me, videoUrl, videoUrl, posterUrl, caption, normTags(hashtags, caption), extracted?.title || soundTitle, sid, status, scheduledAt, sourceClipId, remixType])).rows[0];
         if (soundId && status === 'published') await c.query('update sounds set uses_count = uses_count + 1 where id = $1', [soundId]);
         const mine = productIds.filter(isUuid).length ? (await c.query('select pr.id from products pr join stores s on s.id = pr.store_id where s.owner_id = $1 and pr.id = any($2::uuid[])', [me, productIds.filter(isUuid)])).rows : [];
         for (const m of mine) await c.query('insert into video_products (video_id, product_id) values ($1,$2) on conflict do nothing', [id, m.id]);
         return v;
       });
+      if (row.status === 'published') await notifyRemix(row);
       res.status(201).json((await queryVideos(req.user, ['v.id = $1'], [row.id], 1, { includeUnpublished: true }))[0]);
     } finally { tmp.forEach(rm); }
   }));
@@ -345,8 +361,10 @@ export function buildRouter() {
     if (status === 'published') scheduledAt = null;
     if (status === 'draft') scheduledAt = null;
     const wasPub = row.status === 'published';
+    if (!wasPub && status === 'published' && row.source_clip_id && row.remix_type) await assertCanRemix(req.user, row.source_clip_id, row.remix_type);
     await q('update videos set status = $1, scheduled_at = $2 where id = $3', [status, scheduledAt, id]);
     if (!wasPub && status === 'published' && row.sound_id) await q('update sounds set uses_count = uses_count + 1 where id = $1', [row.sound_id]);
+    if (!wasPub && status === 'published') await notifyRemix({ ...row, status });
     res.json((await queryVideos(req.user, ['v.id = $1'], [id], 1, { includeUnpublished: true }))[0]);
   }));
   // مشاهدة: مرة لكل مستخدم/مقطع، completed يُرفع ولا يُخفض، لا تُكشف للآخرين

@@ -27,6 +27,7 @@ async function renderNotes(el, ctx) {
     const v = n.videoId ? await api.getVideo(n.videoId) : null;
     let text;
     if (n.type === 'system') text = n.text === 'welcome' ? t('welcome') : n.text === 'storeReady' ? `${t('myStore')}: ${t('active')}` : n.text;
+    else if (n.type === 'remix') text = t(n.text === 'stitch' ? 'n_remix_stitch' : n.text === 'duet' ? 'n_remix_duet' : 'n_remix');
     else text = t('n_' + n.type, { text: n.text || '' });
     return `<li class="notif ${n.read ? '' : 'unread'}">${from ? `<a href="#/profile/${from.id}"><img class="av" src="${avatarOf(from)}" alt=""></a>` : `<span class="av sys">${logoMark(30)}</span>`}
       <div class="grow">${from ? `<b>${esc(from.name)}</b> ` : ''}<span>${esc(text)}</span><div class="muted sm">${esc(timeAgo(n.createdAt))}</div></div>
