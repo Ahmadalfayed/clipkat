@@ -3,7 +3,7 @@
 :root {
   --primary: #12c2a0; --primary-ink: #04221c; --accent: #f5a524; --like: #ff5d73; --danger: #ff5d73; --ok: #19c37d;
   --grad: linear-gradient(135deg, #12c2a0 0%, #5fd08a 45%, #f5a524 100%);
-  --radius: 16px; --nav-h: 64px; --app-w: 480px;
+  --radius: 16px; --nav-h: 64px; --app-w: 480px; --notice-gap: 0px;
   --ease: cubic-bezier(.2, .8, .2, 1);
   font-family: 'Cairo', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
@@ -29,7 +29,8 @@ h1, h2, h3 { line-height: 1.3; margin: 0; }
 #app { position: relative; max-width: var(--app-w); margin: 0 auto; min-height: 100dvh; background: var(--bg); }
 @media (min-width: 700px) { #app { box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(0,0,0,.25); } }
 @media (min-width: 1024px) { #app:not(.immersive) { --app-w: 820px; } }
-#view { padding-bottom: calc(var(--nav-h) + 24px + env(safe-area-inset-bottom)); outline: none; }
+#view { padding-bottom: calc(var(--nav-h) + 24px + var(--notice-gap) + env(safe-area-inset-bottom)); outline: none; }
+#app.has-demo { --notice-gap: 40px; }
 #app.immersive #view { padding: 0; height: 100dvh; overflow: hidden; position: relative; background: #000; }
 .loading { display: grid; place-items: center; min-height: 50vh; }
 .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--primary); animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; }
@@ -192,7 +193,7 @@ h1, h2, h3 { line-height: 1.3; margin: 0; }
 .shop-card .price { color: var(--accent); font-weight: 800; font-size: 13px; }
 .shop-card em { font-style: normal; color: rgba(255,255,255,.7); font-size: 11px; }
 .shop-cta { background: var(--grad); color: var(--primary-ink); font-weight: 800; font-size: 12.5px; padding: 6px 12px; border-radius: 10px; }
-.mute-hint { position: absolute; z-index: 4; top: 72px; left: 50%; transform: translate(-50%, -10px); display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,.55); color: #fff; padding: 6px 12px; border-radius: 99px; font-size: 13px; font-weight: 700; opacity: 0; transition: .3s; pointer-events: none; }
+.mute-hint { position: absolute; z-index: 4; top: 42%; left: 50%; transform: translate(-50%, -10px); display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,.55); color: #fff; padding: 6px 12px; border-radius: 99px; font-size: 13px; font-weight: 700; opacity: 0; transition: .3s; pointer-events: none; white-space: nowrap; }
 .mute-hint.show { opacity: 1; transform: translate(-50%, 0); }
 .flash { position: absolute; z-index: 4; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,.9); opacity: 0; pointer-events: none; }
 .flash.go { animation: flash .6s var(--ease); }
@@ -339,8 +340,20 @@ h1, h2, h3 { line-height: 1.3; margin: 0; }
 .prod-admin li { display: flex; align-items: center; gap: 10px; padding: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
 .prod-admin img { width: 54px; height: 54px; border-radius: 10px; }
 .prod-admin .grow > * { display: block; }
-.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
-.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; white-space: nowrap; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); -webkit-overflow-scrolling: touch; }
+.table-wrap::-webkit-scrollbar { height: 8px; }
+.table-wrap::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 70%, transparent); border-radius: 8px; }
+@media (max-width: 640px) {
+  .table-wrap.stack { overflow: visible; border: 0; background: transparent; }
+  .table-wrap.stack .tbl { min-width: 0; width: 100%; white-space: normal; }
+  .table-wrap.stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .table-wrap.stack tbody, .table-wrap.stack tr, .table-wrap.stack td { display: block; }
+  .table-wrap.stack tr { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; margin: 0 0 10px; padding: 10px 12px; }
+  .table-wrap.stack td { border: 0; padding: 6px 0; text-align: start; }
+  .table-wrap.stack td::before { content: attr(data-label); display: block; color: var(--muted); font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+}
+.tbl { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 13.5px; white-space: nowrap; }
+.tbl bdi[dir="ltr"], .tbl bdi { direction: ltr; unicode-bidi: isolate; }
 .tbl th, .tbl td { padding: 10px 12px; text-align: start; border-bottom: 1px solid var(--line); }
 .tbl th { color: var(--muted); font-weight: 700; background: var(--surface2); position: sticky; top: 0; }
 .tbl tr:last-child td { border-bottom: 0; }
@@ -385,7 +398,7 @@ html, body { overflow-x: clip; }
 #demoNotice span { overflow: hidden; text-overflow: ellipsis; }
 #demoNotice button { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 0; background: rgba(127,127,127,.2); color: inherit; cursor: pointer; padding: 0; flex: none; }
 #app.immersive #demoNotice { bottom: auto; top: calc(54px + env(safe-area-inset-top)); background: rgba(10,14,28,.55); color: #fff; border-color: rgba(245,165,36,.6); backdrop-filter: blur(8px); }
-#app.immersive .mute-hint { top: 92px; }
+#app.immersive .mute-hint { top: 42%; }
 .status.warn-s { color: var(--accent); }
 [data-theme=light] .status.warn-s { color: #b86e00; }
 .form-ok { color: var(--ok); font-weight: 700; font-size: 13px; margin: 0; }
@@ -450,13 +463,17 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
 .row-end { display: flex; justify-content: flex-end; margin: 8px 0; }
 
 /* المرحلة 3: الرسائل والمسودات */
-.chat-page { display: flex; flex-direction: column; height: calc(100dvh - 64px); }
+.chat-page { display: flex; flex-direction: column; height: calc(100dvh - var(--nav-h) - var(--notice-gap) - env(safe-area-inset-bottom)); }
 .msgs { flex: 1; overflow: auto; list-style: none; margin: 0; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-.msg { display: flex; gap: 8px; align-items: flex-end; }
-.msg.mine { flex-direction: row-reverse; }
-.msg .bubble { max-width: 80%; padding: 8px 12px; border-radius: 16px; background: var(--surface); }
-.msg.mine .bubble { background: var(--accent, #2a6); color: #fff; }
+.msg { display: flex; gap: 8px; align-items: flex-end; width: fit-content; max-width: 80%; }
+.msg:not(.mine) { margin-left: auto; margin-right: 0; }
+.msg.mine { margin-left: 0; margin-right: auto; }
+.msg .bubble { padding: 8px 12px; border-radius: 16px; background: var(--surface); }
+.msg.mine .bubble { background: var(--accent); color: #1a1200; }
 .msg.deleted { opacity: .65; font-style: italic; }
+.msg-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+.msg.mine .msg-meta { justify-content: flex-end; }
+.msg .linkbtn { color: inherit; text-decoration: underline; opacity: .85; }
 .bubble .clip-share { display: flex; gap: 8px; align-items: center; color: inherit; text-decoration: none; }
 .bubble .clip-share img { width: 64px; height: 80px; object-fit: cover; border-radius: 8px; }
 .chat-form { display: flex; gap: 8px; padding: 8px 12px 16px; border-top: 1px solid var(--line, rgba(127,127,127,.2)); }
@@ -469,3 +486,11 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
 .draft-row img { width: 56px; height: 72px; object-fit: cover; border-radius: 8px; }
 .urow { display: flex; gap: 10px; align-items: center; color: inherit; text-decoration: none; }
 .seg .pill { margin-inline-start: 4px; }
+
+/* عزل النصوص اللاتينية (مثل رقم إصدار السياسة) داخل فقرات عربية */
+bdi[dir="ltr"] { direction: ltr; unicode-bidi: isolate; }
+
+.policy-meta, .policy-intro, .policy-ver { display: block; margin: 8px 0 0; line-height: 1.7; }
+.policy-meta, .policy-ver { color: var(--muted); font-size: 13.5px; }
+.policy-code { direction: ltr; unicode-bidi: isolate; display: block; margin: 2px 0 12px; padding: 8px 12px; border-radius: 10px; background: var(--surface2); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: normal; word-break: keep-all; text-align: start; }
+.policy-intro { margin: 8px 0 12px; }

@@ -87,6 +87,6 @@ function msgHTML(m, me, other) {
     : `<button type="button" class="linkbtn" data-act="report">${esc(t('report'))}</button>`;
   return `<li class="msg ${mine ? 'mine' : ''}" data-mid="${m.id}">
     ${mine ? '' : `<img class="av sm" src="${avatarOf(other)}" alt="">`}
-    <div class="bubble"><p>${esc(m.text)}</p>${clip}<div class="muted sm">${esc(timeAgo(m.createdAt))} ${acts}</div></div>
+    <div class="bubble"><p>${esc(m.text || '')}</p>${clip}<div class="msg-meta"><span class="muted sm">${esc(timeAgo(m.createdAt))}</span> ${acts}</div></div>
   </li>`;
 }

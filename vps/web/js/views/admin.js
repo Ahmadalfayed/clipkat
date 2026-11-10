@@ -30,17 +30,28 @@ export async function render(el, params, ctx) {
         <ul class="plan-break">${d.byPlan.map((p) => `<li><span>${esc(t('plan_' + p.planId))}</span><span class="muted">×${p.count}</span><b>${esc(fmtKWD(p.total))}</b></li>`).join('')}</ul></section>
     </div>
     <h2 class="sec-title">${icon('chart', { size: 18 })} ${esc(t('rentals'))}</h2>
-    <div class="table-wrap"><table class="tbl"><thead><tr><th>${esc(t('store'))}</th><th>${esc(t('owner'))}</th><th>${esc(t('plan'))}</th><th>${esc(t('amount'))}</th><th>${esc(t('method'))}</th><th>${esc(t('date'))}</th><th>${esc(t('expires'))}</th><th>${esc(t('status'))}</th></tr></thead><tbody>
-    ${d.rentals.map((r) => `<tr><td><a href="#/store/${r.storeId}">${esc(r.store?.name)}</a></td><td><bdi>@${esc(r.owner?.username)}</bdi></td><td>${esc(t('plan_' + r.planId))}</td><td>${esc(fmtKWD(r.amount))}</td><td>${esc(t(r.method))}</td><td>${esc(fmtDate(r.paidAt))}</td><td>${r.endAt ? esc(fmtDate(r.endAt)) : '—'}</td>
-      <td>${rentalBadge(r)}${r.status === 'pending' && api.activateRental ? ` <button class="btn sm primary" data-activate="${r.id}">${esc(t('activate'))}</button> <button class="btn sm ghost" data-cancel="${r.id}">${esc(t('cancelRental'))}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>
+    <div class="table-wrap stack"><table class="tbl"><thead><tr><th>${esc(t('store'))}</th><th>${esc(t('owner'))}</th><th>${esc(t('plan'))}</th><th>${esc(t('amount'))}</th><th>${esc(t('method'))}</th><th>${esc(t('date'))}</th><th>${esc(t('expires'))}</th><th>${esc(t('status'))}</th></tr></thead><tbody>
+    ${d.rentals.map((r) => `<tr>
+      <td data-label="${esc(t('store'))}"><a href="#/store/${r.storeId}">${esc(r.store?.name)}</a></td>
+      <td data-label="${esc(t('owner'))}"><bdi dir="ltr">@${esc(r.owner?.username)}</bdi></td>
+      <td data-label="${esc(t('plan'))}">${esc(t('plan_' + r.planId))}</td>
+      <td data-label="${esc(t('amount'))}">${esc(fmtKWD(r.amount))}</td>
+      <td data-label="${esc(t('method'))}">${esc(t(r.method))}</td>
+      <td data-label="${esc(t('date'))}">${esc(fmtDate(r.paidAt))}</td>
+      <td data-label="${esc(t('expires'))}">${r.endAt ? esc(fmtDate(r.endAt)) : '—'}</td>
+      <td data-label="${esc(t('status'))}">${rentalBadge(r)}${r.status === 'pending' && api.activateRental ? ` <button class="btn sm primary" data-activate="${r.id}">${esc(t('activate'))}</button> <button class="btn sm ghost" data-cancel="${r.id}">${esc(t('cancelRental'))}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>
     ${rep ? `<h2 class="sec-title" id="reports">${icon('shield', { size: 18 })} ${esc(t('reports'))}</h2>
     <div class="seg" role="tablist"><a role="tab" href="#/admin?r=open" class="${rstatus === 'open' ? 'on' : ''}">${esc(t('openReports'))}</a><a role="tab" href="#/admin?r=actioned" class="${rstatus === 'actioned' ? 'on' : ''}">${esc(t('closedReports'))}</a><a role="tab" href="#/admin?r=dismissed" class="${rstatus === 'dismissed' ? 'on' : ''}">${esc(t('a_dismiss'))}</a></div>
-    ${rep.reports.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>${esc(t('date'))}</th><th>${esc(t('reportReason'))}</th><th>${esc(t('target'))}</th><th>${esc(t('reporter'))}</th><th>${esc(t('status'))}</th></tr></thead><tbody>
+    ${rep.reports.length ? `<div class="table-wrap stack"><table class="tbl"><thead><tr><th>${esc(t('date'))}</th><th>${esc(t('reportReason'))}</th><th>${esc(t('target'))}</th><th>${esc(t('reporter'))}</th><th>${esc(t('status'))}</th></tr></thead><tbody>
     ${rep.reports.map((x) => { const tu = rep.users.find((u) => u.id === x.targetUserId), ru = rep.users.find((u) => u.id === x.reporterId);
       const what = x.type === 'video' ? `<a href="#/watch/${x.videoId}">${esc(x.videoCaption || x.videoId)}</a>` : x.type === 'comment' ? `«${esc(x.commentText ?? '—')}»` : x.type === 'sound' ? `<a href="#/sound/${x.soundId}">${esc(x.soundTitle || '')}</a>` : '';
       const acts = ['dismiss', ...(x.type === 'video' && !x.videoHidden ? ['hide_video'] : []), ...(x.type === 'comment' && x.commentText != null ? ['delete_comment'] : []), ...(x.type === 'sound' && !x.soundHidden ? ['hide_sound'] : []), ...(tu && tu.role !== 'admin' && !tu.banned ? ['ban_user'] : [])];
-      return `<tr><td>${esc(fmtDate(x.createdAt))}</td><td>${esc(t('r_' + x.reason))}${x.details ? `<div class="muted sm">${esc(x.details)}</div>` : ''}</td><td>${esc(t('t_' + x.type))}: <a href="#/profile/${x.targetUserId}"><bdi>@${esc(tu?.username)}</bdi></a> ${what}</td><td><bdi>@${esc(ru?.username)}</bdi></td>
-        <td>${x.status === 'open' ? acts.map((a) => `<button class="btn sm ${a === 'dismiss' ? 'ghost' : 'primary'}" data-res="${x.id}" data-action="${a}">${esc(t('a_' + a))}</button>`).join(' ') : esc(t('a_' + x.action))}</td></tr>`; }).join('')}</tbody></table></div>` : emptyState(t('noReports'))}` : ''}
+      return `<tr>
+        <td data-label="${esc(t('date'))}">${esc(fmtDate(x.createdAt))}</td>
+        <td data-label="${esc(t('reportReason'))}">${esc(t('r_' + x.reason))}${x.details ? `<div class="muted sm">${esc(x.details)}</div>` : ''}</td>
+        <td data-label="${esc(t('target'))}">${esc(t('t_' + x.type))}: <a href="#/profile/${x.targetUserId}"><bdi dir="ltr">@${esc(tu?.username)}</bdi></a> ${what}</td>
+        <td data-label="${esc(t('reporter'))}"><bdi dir="ltr">@${esc(ru?.username)}</bdi></td>
+        <td data-label="${esc(t('status'))}">${x.status === 'open' ? acts.map((a) => `<button class="btn sm ${a === 'dismiss' ? 'ghost' : 'primary'}" data-res="${x.id}" data-action="${a}">${esc(t('a_' + a))}</button>`).join(' ') : esc(t('a_' + x.action))}</td></tr>`; }).join('')}</tbody></table></div>` : emptyState(t('noReports'))}` : ''}
   </div>`;
   el.querySelectorAll('[data-res]').forEach((b) => b.addEventListener('click', async () => {
     if (b.dataset.action !== 'dismiss' && !confirm(t('a_' + b.dataset.action) + '?')) return;

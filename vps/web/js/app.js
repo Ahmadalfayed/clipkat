@@ -37,10 +37,12 @@ export const brandHTML = (size = 28) => `<span class="brand">${logoMark(size)}<s
 
 function renderDemoNotice() {
   let el = document.getElementById('demoNotice');
-  if (sessionStorage.getItem('ck:noticeHidden')) { el?.remove(); return; }
-  if (!el) { el = document.createElement('div'); el.id = 'demoNotice'; el.setAttribute('role', 'note'); $('#app').append(el); }
+  const app = $('#app');
+  if (sessionStorage.getItem('ck:noticeHidden')) { el?.remove(); app?.classList.remove('has-demo'); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'demoNotice'; el.setAttribute('role', 'note'); app.append(el); }
+  app.classList.add('has-demo');
   el.innerHTML = `<span>${esc(t(api.mode !== 'local' ? 'demoNoticeCloud' : 'demoNotice'))}</span><button type="button" aria-label="${esc(t('hideNotice'))}">${icon('close', { size: 12 })}</button>`;
-  el.querySelector('button').onclick = () => { sessionStorage.setItem('ck:noticeHidden', '1'); el.remove(); };
+  el.querySelector('button').onclick = () => { sessionStorage.setItem('ck:noticeHidden', '1'); el.remove(); app.classList.remove('has-demo'); };
 }
 
 async function renderNav() {

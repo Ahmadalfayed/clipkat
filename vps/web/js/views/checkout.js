@@ -42,7 +42,7 @@ export async function render(el, params, ctx) {
         <div class="methods" role="radiogroup" aria-label="${esc(t('payMethod'))}">${PAYMENT_METHODS.map((m, i) => `<label class="method"><input type="radio" name="method" value="${m}" ${i === 0 ? 'checked' : ''}>${METHOD_ICONS[m]}<span>${esc(t(m))}</span></label>`).join('')}</div>
       </section>
       <section class="card policy-accept"><p class="note">كليب كات تؤجّرك مساحة المتجر فقط. أموال مشترياتك تصل لك مباشرة من المشترين، والبيع والتوصيل والإرجاع والفواتير مسؤوليتك أمامهم.</p>
-        <label class="radio-row"><input type="checkbox" name="acceptPolicy" value="${esc(POLICY.version)}" required> <span>قرأت وأوافق على <a href="#/policy" target="_blank" rel="noopener">سياسة تأجير المتاجر</a> (الإصدار ${esc(POLICY.version)})</span></label></section>
+        <label class="radio-row"><input type="checkbox" name="acceptPolicy" value="${esc(POLICY.version)}" required> <span>قرأت وأوافق على <a href="#/policy" target="_blank" rel="noopener">سياسة تأجير المتاجر</a> (الإصدار <bdi dir="ltr">${esc(POLICY.version)}</bdi>)</span></label></section>
       <p class="form-err" role="alert"></p>
       <button class="btn primary block lg" type="submit" id="payBtn">${esc(t('payDemo', { amount: fmtKWD(plan.price) }))}</button>
     </form></div>`;
