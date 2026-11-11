@@ -80,7 +80,12 @@ export async function render(el, params, ctx) {
           if (err) err.textContent = m === 'badGoogle' || m === 'bad' ? t('badGoogle') : m === 'googleDisabled' ? t('googleDisabled') : m === 'googleLinked' ? t('googleLinked') : m === 'emailTaken' ? t('emailTaken') : m === 'taken' ? t('userTaken') : (t(m) !== m ? t(m) : t('badGoogle'));
         }
       };
-      loadGsi().then(() => {
+      const googleWidth = () => {
+        const form = el.querySelector('#authForm');
+        const raw = (form && form.clientWidth) || slot.clientWidth || 0;
+        return Math.max(200, Math.min(Math.floor(raw || 320), 400));
+      };
+      const paintGoogle = () => {
         if (!el.contains(slot) || !window.google?.accounts?.id) return;
         window.google.accounts.id.initialize({
           client_id: api.googleClientId,
@@ -91,7 +96,8 @@ export async function render(el, params, ctx) {
           context: mode === 'signup' ? 'signup' : 'signin',
           itp_support: true
         });
-        const w = Math.max(240, Math.min(Math.floor(slot.getBoundingClientRect().width || 320), 400));
+        slot.replaceChildren();
+        const w = googleWidth();
         window.google.accounts.id.renderButton(slot, {
           type: 'standard',
           theme: 'outline',
@@ -103,7 +109,9 @@ export async function render(el, params, ctx) {
           locale: lang === 'ar' ? 'ar' : 'en'
         });
         slot.setAttribute('aria-label', t('continueWithGoogle'));
-      }).catch(() => { if (err) err.textContent = t('googleUnavailable'); });
+      };
+      loadGsi().then(() => requestAnimationFrame(() => requestAnimationFrame(paintGoogle)))
+        .catch(() => { if (err) err.textContent = t('googleUnavailable'); });
     }
   };
   const done = async () => { await ctx.refreshMe(); toast(t('welcome'), 'ok'); ctx.navigate(next.startsWith('#/login') ? '#/feed' : next); };
