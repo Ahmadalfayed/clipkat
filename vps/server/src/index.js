@@ -18,8 +18,10 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);       // خلف Caddy
 app.use(helmet({
   contentSecurityPolicy: { useDefaults: false, directives: {
-    defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"], imgSrc: ["'self'", 'data:', 'blob:'],
-    mediaSrc: ["'self'", 'blob:'], fontSrc: ["'self'", 'data:'], connectSrc: ["'self'"], objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'none'"], formAction: ["'self'"]
+    defaultSrc: ["'self'"], scriptSrc: ["'self'", 'https://accounts.google.com'], styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", 'data:', 'blob:', 'https://www.gstatic.com'],
+    mediaSrc: ["'self'", 'blob:'], fontSrc: ["'self'", 'data:'], connectSrc: ["'self'", 'https://accounts.google.com'],
+    frameSrc: ['https://accounts.google.com'], objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'none'"], formAction: ["'self'"]
   } },
   hsts: config.cookieSecure ? { maxAge: 15552000 } : false,   // HSTS فقط عند HTTPS
   crossOriginEmbedderPolicy: false

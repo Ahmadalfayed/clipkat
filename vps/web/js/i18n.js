@@ -205,6 +205,25 @@ Object.assign(en, {
   t_sound: 'Sound', a_hide_sound: 'Hide sound'
 });
 
+
+// ===== الدخول بحساب Google (© 2026 وطن النهار) =====
+Object.assign(ar, {
+  continueWithGoogle: 'المتابعة بحساب Google',
+  orDivider: 'أو',
+  badGoogle: 'تعذر الدخول بحساب Google. حاول مرة أخرى.',
+  googleDisabled: 'الدخول بحساب Google غير مفعّل حالياً.',
+  googleUnavailable: 'تعذر تحميل زر Google. حدّث الصفحة ثم حاول.',
+  googleLinked: 'هذا البريد مرتبط بحساب Google آخر.'
+});
+Object.assign(en, {
+  continueWithGoogle: 'Continue with Google',
+  orDivider: 'or',
+  badGoogle: 'Google sign-in failed. Please try again.',
+  googleDisabled: 'Google sign-in is not enabled.',
+  googleUnavailable: 'Could not load the Google button. Refresh and try again.',
+  googleLinked: 'This email is already linked to a different Google account.'
+});
+
 export let lang = localStorage.getItem('ck:lang') || 'ar';
 export const brandName = () => BRAND[lang];
 

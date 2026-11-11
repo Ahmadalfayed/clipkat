@@ -51,6 +51,12 @@ before(async () => {
 });
 after(() => { srv?.kill('SIGTERM'); fs.rmSync(upl, { recursive: true, force: true }); });
 
+test('config hides Google sign-in when GOOGLE_CLIENT_ID is unset', async () => {
+  const r = await new Client().get('/config');
+  assert.equal(r.status, 200);
+  assert.ok(!r.body.googleClientId);
+});
+
 test('unauthenticated users cannot change data or read private endpoints', async () => {
   const anon = new Client();
   for (const [m, p] of [['GET', '/me/settings'], ['PATCH', '/me/settings'], ['GET', '/me/blocks'], ['GET', '/me/follow-requests'], ['POST', '/reports'], ['GET', '/admin/reports'], ['POST', '/auth/password']]) {

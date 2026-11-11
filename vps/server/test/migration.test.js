@@ -26,5 +26,8 @@ test('v1 database upgrades additively and idempotently', async () => {
     assert.deepEqual(r, { target_type: 'video', status: 'open', reason: 'old reason' });
     assert.equal((await c.query('select count(*)::int n from notifications')).rows[0].n, 1);
     assert.equal((await c.query('select count(*)::int n from videos')).rows[0].n, 1);
+    const g = (await c.query("select google_sub from profiles where username = 'olduser'")).rows[0];
+    assert.equal(g.google_sub, null);
+    assert.equal((await c.query("select count(*)::int n from pg_indexes where indexname = 'profiles_google_sub_uidx'")).rows[0].n, 1);
   } finally { await c.end(); }
 });
