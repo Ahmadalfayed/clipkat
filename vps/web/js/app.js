@@ -28,7 +28,7 @@ export const ctx = {
 export function setTheme(th) { document.documentElement.dataset.theme = th; localStorage.setItem('ck:theme', th); document.querySelector('meta[name=theme-color]')?.setAttribute('content', th === 'dark' ? '#0b1020' : '#f7f5f0'); }
 export const theme = () => document.documentElement.dataset.theme;
 export function toggleTheme() { setTheme(theme() === 'dark' ? 'light' : 'dark'); }
-export function toggleLang() { setLang(lang === 'ar' ? 'en' : 'ar'); document.title = `${brandName()} — ${t('prototype')}`; route(); }
+export function toggleLang() { setLang(lang === 'ar' ? 'en' : 'ar'); document.title = `${brandName()} — ${t('tagline')}`; route(); }
 export function prefsButtons() {
   return `<button class="icon-btn" data-act="lang" aria-label="${esc(t('language'))}: ${lang === 'ar' ? 'English' : 'العربية'}"><span class="lang-txt">${lang === 'ar' ? 'EN' : 'ع'}</span></button>
   <button class="icon-btn" data-act="theme" aria-label="${esc(t('theme'))}">${icon(theme() === 'dark' ? 'sun' : 'moon', { size: 20 })}</button>`;
@@ -97,7 +97,7 @@ document.addEventListener('click', (e) => {
 
 (async function boot() {
   setLang(lang); setTheme(localStorage.getItem('ck:theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
-  document.title = `${brandName()} — ${t('prototype')}`;
+  document.title = `${brandName()} — ${t('tagline')}`;
   window.addEventListener('hashchange', route);
   await api.init();
   if (!location.hash) location.replace('#/feed');

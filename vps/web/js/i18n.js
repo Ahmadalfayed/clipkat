@@ -43,7 +43,7 @@ const ar = {
   admin: 'لوحة المشرف (تجريبي)', revenue: 'الإيرادات', activeRentals: 'إيجارات نشطة', users: 'مستخدمون', totalVideos: 'مقاطع', monthlyRevenue: 'الإيرادات الشهرية', byPlan: 'حسب الخطة',
   store: 'المتجر', owner: 'المالك', amount: 'المبلغ', date: 'التاريخ', status: 'الحالة', method: 'الطريقة', adminOnly: 'هذه الصفحة للمشرف فقط', settings: 'الإعدادات',
   theme: 'المظهر', dark: 'داكن', light: 'فاتح', language: 'اللغة', shopNow: 'تسوّق', taggedProducts: 'منتجات في هذا المقطع', back: 'رجوع', notFound: 'الصفحة غير موجودة',
-  prototype: 'نموذج أولي', demoNotice: 'نسخة تجريبية — بياناتك تبقى على جهازك فقط', hideNotice: 'إخفاء التنبيه', results: 'النتائج', creators: 'صنّاع', resetDemo: 'إعادة ضبط البيانات التجريبية', resetConfirm: 'سيتم حذف كل البيانات المحلية وإعادة البيانات التجريبية. متابعة؟'
+  prototype: 'نموذج أولي', tagline: 'مقاطع قصيرة ومتاجر للصنّاع', demoNotice: 'نسخة تجريبية — بياناتك تبقى على جهازك فقط', hideNotice: 'إخفاء التنبيه', results: 'النتائج', creators: 'صنّاع', resetDemo: 'إعادة ضبط البيانات التجريبية', resetConfirm: 'سيتم حذف كل البيانات المحلية وإعادة البيانات التجريبية. متابعة؟'
 };
 
 const en = {
@@ -89,7 +89,7 @@ const en = {
   admin: 'Admin dashboard (demo)', revenue: 'Revenue', activeRentals: 'Active rentals', users: 'Users', totalVideos: 'Clips', monthlyRevenue: 'Monthly revenue', byPlan: 'By plan',
   store: 'Store', owner: 'Owner', amount: 'Amount', date: 'Date', status: 'Status', method: 'Method', adminOnly: 'Admins only', settings: 'Settings',
   theme: 'Theme', dark: 'Dark', light: 'Light', language: 'Language', shopNow: 'Shop', taggedProducts: 'Products in this clip', back: 'Back', notFound: 'Page not found',
-  prototype: 'Prototype', demoNotice: 'Demo version — your data stays on this device only', hideNotice: 'Hide notice', results: 'Results', creators: 'Creators', resetDemo: 'Reset demo data', resetConfirm: 'All local data will be erased and demo data restored. Continue?'
+  prototype: 'Prototype', tagline: 'Short videos and creator stores', demoNotice: 'Demo version — your data stays on this device only', hideNotice: 'Hide notice', results: 'Results', creators: 'Creators', resetDemo: 'Reset demo data', resetConfirm: 'All local data will be erased and demo data restored. Continue?'
 };
 
 const dict = { ar, en };

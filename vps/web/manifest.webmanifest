@@ -1,1 +1,16 @@
-{"name":"ClipKat كليب كات (prototype)","short_name":"ClipKat","start_url":"./#/feed","display":"standalone","background_color":"#0b1020","theme_color":"#0b1020","dir":"rtl","lang":"ar","icons":[{"src":"assets/logo.svg","sizes":"any","type":"image/svg+xml"}]}
+{
+  "name": "كليب كات",
+  "short_name": "كليب كات",
+  "start_url": "/#/feed",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    {"src": "/assets/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
+    {"src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "/assets/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}
+  ]
+}

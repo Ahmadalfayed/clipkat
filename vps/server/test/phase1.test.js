@@ -270,3 +270,53 @@ test('privacy and terms pages are served at pretty and .html URLs and linked fro
   const auth = await (await fetch(root + '/js/views/auth.js')).text();
   assert.ok(auth.includes('legalLinksHTML'));
 });
+
+test('homepage SEO tags, robots, sitemap and og image are served', async () => {
+  const root = BASE.replace(/\/api$/, '');
+  const res = await fetch(root + '/');
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  for (const s of [
+    'lang="ar"', 'dir="rtl"',
+    'كليب كات — مقاطع قصيرة ومتاجر للصنّاع في الكويت والخليج',
+    'منصة مقاطع فيديو قصيرة للصنّاع في الكويت والخليج',
+    'rel="canonical" href="https://clipkat.live/"',
+    'property="og:image" content="https://clipkat.live/assets/og.png"',
+    'name="twitter:card" content="summary_large_image"',
+    'name="theme-color" content="#0b1020"',
+    'rel="apple-touch-icon" href="/assets/apple-touch-icon.png"',
+    'application/ld+json',
+    '"@type":"WebSite"',
+    '"@type":"Organization"',
+    'https://clipkat.live/',
+    'SearchAction'
+  ]) {
+    if (s === 'SearchAction') assert.ok(!html.includes(s), 'SearchAction should be absent without a real search URL');
+    else assert.ok(html.includes(s), 'homepage missing: ' + s);
+  }
+  assert.ok(html.includes('<noscript>') && html.includes('منصة مقاطع فيديو قصيرة'), 'noscript intro');
+  assert.ok(html.includes('class="sr-only"'), 'crawlable intro');
+
+  const robots = await fetch(root + '/robots.txt');
+  assert.equal(robots.status, 200);
+  const rtxt = await robots.text();
+  assert.ok(rtxt.includes('Disallow: /api/'));
+  assert.ok(rtxt.includes('Disallow: /admin'));
+  assert.ok(rtxt.includes('Sitemap: https://clipkat.live/sitemap.xml'));
+
+  const sm = await fetch(root + '/sitemap.xml');
+  assert.equal(sm.status, 200);
+  const sxml = await sm.text();
+  for (const loc of ['https://clipkat.live/', 'https://clipkat.live/privacy', 'https://clipkat.live/terms']) {
+    assert.ok(sxml.includes('<loc>' + loc + '</loc>'), loc);
+  }
+
+  const og = await fetch(root + '/assets/og.png');
+  assert.equal(og.status, 200);
+  assert.ok((og.headers.get('content-type') || '').startsWith('image/png'));
+  const buf = Buffer.from(await og.arrayBuffer());
+  assert.ok(buf.length > 10000, 'og image too small');
+
+  const ico = await fetch(root + '/assets/apple-touch-icon.png');
+  assert.equal(ico.status, 200);
+});
