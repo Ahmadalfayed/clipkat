@@ -3,7 +3,7 @@ import { t, lang } from '../i18n.js';
 import { BRAND } from '../config.js';
 import { icon, esc, $, toast } from '../ui.js';
 import { pageHead } from './common.js';
-import { brandHTML } from '../app.js';
+import { brandHTML, legalLinksHTML } from '../app.js';
 
 let gsiPromise;
 function loadGsi() {
@@ -42,6 +42,7 @@ export async function render(el, params, ctx) {
         <p class="auth-or"><span>${esc(t('orDivider'))}</span></p>
         <div id="googleBtn" class="google-btn-slot" role="group" aria-label="${esc(t('continueWithGoogle'))}"></div>
       </div>` : ''}
+      ${legalLinksHTML()}
       ${cloud ? '' : `<div class="demo-logins">
         <button class="btn ghost block" data-demo="sara.travels">${icon('user', { size: 16 })} ${esc(t('demoUser'))}</button>
         <button class="btn ghost block" data-demo="fahad.coffee">${icon('store', { size: 16 })} ${esc(t('demoSeller'))}</button>

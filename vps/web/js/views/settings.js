@@ -41,7 +41,10 @@ export async function render(el, params, ctx) {
     <a class="set-row link" href="#/sounds">${icon('music', { size: 18 })}<span class="grow"><b>${esc(t('soundLibrary'))}</b></span>${icon('back', { size: 16, cls: 'flip-ltr' })}</a>
     <a class="set-row link" href="#/policy">${icon('store', { size: 18 })}<span class="grow"><b>سياسة تأجير المتاجر والتعاملات</b><small class="muted">كليب كات تؤجّر المتاجر فقط ولا تستلم أموال المشتريات</small></span>${icon('back', { size: 16, cls: 'flip-ltr' })}</a></section>
     <section class="card set-sec soon"><h2>${esc(t('secSoon'))}</h2><p class="muted">${esc(t('soonList'))}</p></section>
-    <p class="muted center sm">© 2026 وطن النهار</p>
+    <section class="card set-sec"><h2>${esc(t('privacyPolicy'))}</h2>
+      <a class="set-row link" href="/privacy"><span class="grow"><b>${esc(t('privacyPolicy'))}</b></span>${icon('back', { size: 16, cls: 'flip-ltr' })}</a>
+      <a class="set-row link" href="/terms"><span class="grow"><b>${esc(t('termsOfUse'))}</b></span>${icon('back', { size: 16, cls: 'flip-ltr' })}</a></section>
+    <p class="muted center sm">جميع الحقوق محفوظة © 2026 وطن النهار</p>
   </div>`;
 
   const save = async (patch, ctl) => {

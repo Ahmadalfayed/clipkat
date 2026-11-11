@@ -213,7 +213,8 @@ Object.assign(ar, {
   badGoogle: 'تعذر الدخول بحساب Google. حاول مرة أخرى.',
   googleDisabled: 'الدخول بحساب Google غير مفعّل حالياً.',
   googleUnavailable: 'تعذر تحميل زر Google. حدّث الصفحة ثم حاول.',
-  googleLinked: 'هذا البريد مرتبط بحساب Google آخر.'
+  googleLinked: 'هذا البريد مرتبط بحساب Google آخر.',
+  privacyPolicy: 'سياسة الخصوصية', termsOfUse: 'شروط الاستخدام'
 });
 Object.assign(en, {
   continueWithGoogle: 'Continue with Google',
@@ -221,7 +222,8 @@ Object.assign(en, {
   badGoogle: 'Google sign-in failed. Please try again.',
   googleDisabled: 'Google sign-in is not enabled.',
   googleUnavailable: 'Could not load the Google button. Refresh and try again.',
-  googleLinked: 'This email is already linked to a different Google account.'
+  googleLinked: 'This email is already linked to a different Google account.',
+  privacyPolicy: 'Privacy policy', termsOfUse: 'Terms of use'
 });
 
 export let lang = localStorage.getItem('ck:lang') || 'ar';

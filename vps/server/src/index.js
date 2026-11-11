@@ -2,6 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import fs from 'node:fs';
+import path from 'node:path';
 import crypto from 'node:crypto';
 import { config } from './config.js';
 import { q, waitForDb, migrate, pool } from './db.js';
@@ -29,6 +30,9 @@ app.use(helmet({
 if (config.corsOrigins.length) app.use(cors({ origin: config.corsOrigins, credentials: true }));
 app.use('/api', express.json({ limit: '100kb' }), csrfGuard, buildRouter());
 app.use('/uploads', express.static(config.uploadDir, { index: false, dotfiles: 'deny', maxAge: '7d', setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff') }));
+const legalPage = (file) => (_req, res) => res.sendFile(path.join(config.webDir, file), { maxAge: '5m' });
+app.get(['/privacy', '/privacy.html'], legalPage('privacy.html'));
+app.get(['/terms', '/terms.html'], legalPage('terms.html'));
 app.use(express.static(config.webDir, { index: 'index.html', maxAge: '5m' }));
 app.use('/api', (_req, _res, next) => next(new HttpError(404, 'notfound')));
 app.use((err, _req, res, _next) => {
