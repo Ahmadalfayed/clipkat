@@ -70,15 +70,17 @@ export async function render(el, params, ctx) {
     const slot = el.querySelector('#googleBtn');
     if (slot && api.googleClientId) {
       const err = $('.form-err', el);
+      const googleErr = (code) => {
+        const msg = code === 'badGoogle' || code === 'bad' ? t('badGoogle') : code === 'googleDisabled' ? t('googleDisabled') : code === 'googleLinked' ? t('googleLinked') : code === 'emailTaken' ? t('emailTaken') : code === 'taken' ? t('userTaken') : (t(code) !== code ? t(code) : t('badGoogle'));
+        if (err) err.textContent = msg;
+        toast(msg, 'warn');
+      };
       const onCred = async (resp) => {
         if (err) err.textContent = '';
         try {
           await api.loginWithGoogle(resp.credential);
           done();
-        } catch (ex) {
-          const m = ex.message;
-          if (err) err.textContent = m === 'badGoogle' || m === 'bad' ? t('badGoogle') : m === 'googleDisabled' ? t('googleDisabled') : m === 'googleLinked' ? t('googleLinked') : m === 'emailTaken' ? t('emailTaken') : m === 'taken' ? t('userTaken') : (t(m) !== m ? t(m) : t('badGoogle'));
-        }
+        } catch (ex) { googleErr(ex.message); }
       };
       const googleWidth = () => {
         const form = el.querySelector('#authForm');
@@ -111,7 +113,7 @@ export async function render(el, params, ctx) {
         slot.setAttribute('aria-label', t('continueWithGoogle'));
       };
       loadGsi().then(() => requestAnimationFrame(() => requestAnimationFrame(paintGoogle)))
-        .catch(() => { if (err) err.textContent = t('googleUnavailable'); });
+        .catch(() => googleErr('googleUnavailable'));
     }
   };
   const done = async () => { await ctx.refreshMe(); toast(t('welcome'), 'ok'); ctx.navigate(next.startsWith('#/login') ? '#/feed' : next); };

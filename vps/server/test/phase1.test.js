@@ -51,6 +51,18 @@ before(async () => {
 });
 after(() => { srv?.kill('SIGTERM'); fs.rmSync(upl, { recursive: true, force: true }); });
 
+test('CSP and COOP allow Google Identity Services', async () => {
+  const res = await fetch(BASE + '/health');
+  const csp = res.headers.get('content-security-policy') || '';
+  assert.match(csp, /script-src[^;]*https:\/\/accounts\.google\.com\/gsi\/client/);
+  assert.match(csp, /style-src[^;]*https:\/\/accounts\.google\.com\/gsi\/style/);
+  assert.match(csp, /frame-src[^;]*https:\/\/accounts\.google\.com\/gsi\//);
+  assert.match(csp, /connect-src[^;]*https:\/\/accounts\.google\.com\/gsi\//);
+  assert.ok(csp.includes('https://*.googleusercontent.com'));
+  assert.equal(res.headers.get('cross-origin-opener-policy'), 'same-origin-allow-popups');
+  assert.equal(res.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
+});
+
 test('config hides Google sign-in when GOOGLE_CLIENT_ID is unset', async () => {
   const r = await new Client().get('/config');
   assert.equal(r.status, 200);
