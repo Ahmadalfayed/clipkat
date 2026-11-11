@@ -4,6 +4,7 @@
 
 ## الأمان المطبَّق
 - كلمات المرور: scrypt مع ملح عشوائي (Node المدمج). الجلسة: JWT في كوكي `HttpOnly` + `SameSite=Strict` (+`Secure` مع HTTPS) وحقل `token_version` لإبطال الجلسات.
+- الدخول بحساب Google: `POST /api/auth/google` مع رمز هوية يُتحقق منه في الخادم (`google-auth-library`) عندما يُضبط `GOOGLE_CLIENT_ID`. الزر يظهر في الواجهة فقط إذا أعاد `/api/config` المعرّف.
 - تحديد المعدّل: عام (600/دقيقة/IP)، ودخول/تسجيل (20/15 دقيقة/IP)، ورفع (60 فيديو/ساعة)، وتعليقات.
 - حماية CSRF: كل طلب يغيّر بيانات يحتاج ترويسة `X-CK: 1` (تُجبر المتصفح على CORS preflight).
 - helmet (CSP صارم، HSTS مع HTTPS)، CORS مغلق افتراضياً (`CORS_ORIGINS` لإضافة مواقع).
@@ -24,4 +25,4 @@
 - جعل حساب مشرفاً: `docker compose exec db psql -U clipkat -d clipkat -c "update profiles set is_admin=true where lower(email)=lower('البريد')"`
 
 ## واجهة REST (مختصر)
-`/api/auth/{signup,login,logout,me}` · `/api/users/…` · `/api/videos` (GET/POST multipart) · `/api/videos/:id/{like,save,share,comments}` · `/api/upload/image` · `/api/stores…` · `/api/products…` · `/api/notifications…` · `/api/admin/{summary,rentals/:id/activate,rentals/:id/cancel}` · `/api/health`
+`/api/auth/{signup,login,google,logout,me}` · `/api/users/…` · `/api/videos` (GET/POST multipart) · `/api/videos/:id/{like,save,share,comments}` · `/api/upload/image` · `/api/stores…` · `/api/products…` · `/api/notifications…` · `/api/admin/{summary,rentals/:id/activate,rentals/:id/cancel}` · `/api/health`

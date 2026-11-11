@@ -20,6 +20,7 @@ export async function createApiAdapter({ base = '', health = true } = {}) {
   a.maxSoundMb = cfg.maxSoundMb || 8;
   a.maxSoundSec = cfg.maxSoundSec || 60;
   a.maxVideoSec = cfg.maxVideoSec || 180;
+  a.googleClientId = cfg.googleClientId || '';
   return a;
 }
 
@@ -27,7 +28,7 @@ export class ApiAdapter {
   constructor(base = '') {
     this.base = base.replace(/\/$/, '') + '/api'; this.mode = 'api'; this.social = true; this.lastFollow = null; this.commentMeta = {};
     this.profiles = new Map(); this.videos = new Map();
-    this._me = undefined; this._mine = null; this.maxVideoMb = MAX_VIDEO_MB;
+    this._me = undefined; this._mine = null; this.maxVideoMb = MAX_VIDEO_MB; this.googleClientId = '';
   }
   async init() {}
   async resetDemo() { /* غير متاح في وضع الخادم */ }
@@ -70,6 +71,10 @@ export class ApiAdapter {
     this._me = user; this._mine = null; this.profiles.set(user.id, user); return user;
   }
   async logout() { try { await this._req('POST', '/auth/logout', {}); } finally { this._me = null; this._mine = null; } }
+  async loginWithGoogle(credential) {
+    const { user } = await this._req('POST', '/auth/google', { credential });
+    this._me = user; this._mine = null; this.profiles.set(user.id, user); return user;
+  }
 
   // ---------- Profiles ----------
   async _profile(id, fresh = false) {

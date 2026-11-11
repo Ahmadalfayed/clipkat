@@ -3,7 +3,23 @@ import { t, lang } from '../i18n.js';
 import { BRAND } from '../config.js';
 import { icon, esc, $, toast } from '../ui.js';
 import { pageHead } from './common.js';
-import { brandHTML } from '../app.js';
+import { brandHTML, legalLinksHTML } from '../app.js';
+
+let gsiPromise;
+function loadGsi() {
+  if (window.google?.accounts?.id) return Promise.resolve();
+  if (gsiPromise) return gsiPromise;
+  gsiPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.defer = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('googleUnavailable'));
+    document.head.appendChild(s);
+  });
+  return gsiPromise;
+}
 
 export async function render(el, params, ctx) {
   const next = params.query.get('next') || '#/feed';
@@ -22,6 +38,11 @@ export async function render(el, params, ctx) {
         <p class="form-err" role="alert"></p>
         <button class="btn primary block lg" type="submit">${esc(mode === 'login' ? t('login') : t('signup'))}</button>
       </form>
+      ${cloud && api.googleClientId ? `<div class="google-auth">
+        <p class="auth-or"><span>${esc(t('orDivider'))}</span></p>
+        <div id="googleBtn" class="google-btn-slot" role="group" aria-label="${esc(t('continueWithGoogle'))}"></div>
+      </div>` : ''}
+      ${legalLinksHTML()}
       ${cloud ? '' : `<div class="demo-logins">
         <button class="btn ghost block" data-demo="sara.travels">${icon('user', { size: 16 })} ${esc(t('demoUser'))}</button>
         <button class="btn ghost block" data-demo="fahad.coffee">${icon('store', { size: 16 })} ${esc(t('demoSeller'))}</button>
@@ -46,6 +67,44 @@ export async function render(el, params, ctx) {
         btn.disabled = false;
       }
     });
+    const slot = el.querySelector('#googleBtn');
+    if (slot && api.googleClientId) {
+      const err = $('.form-err', el);
+      const onCred = async (resp) => {
+        if (err) err.textContent = '';
+        try {
+          await api.loginWithGoogle(resp.credential);
+          done();
+        } catch (ex) {
+          const m = ex.message;
+          if (err) err.textContent = m === 'badGoogle' || m === 'bad' ? t('badGoogle') : m === 'googleDisabled' ? t('googleDisabled') : m === 'googleLinked' ? t('googleLinked') : m === 'emailTaken' ? t('emailTaken') : m === 'taken' ? t('userTaken') : (t(m) !== m ? t(m) : t('badGoogle'));
+        }
+      };
+      loadGsi().then(() => {
+        if (!el.contains(slot) || !window.google?.accounts?.id) return;
+        window.google.accounts.id.initialize({
+          client_id: api.googleClientId,
+          callback: onCred,
+          ux_mode: 'popup',
+          auto_select: false,
+          cancel_on_tap_outside: true,
+          context: mode === 'signup' ? 'signup' : 'signin',
+          itp_support: true
+        });
+        const w = Math.max(240, Math.min(Math.floor(slot.getBoundingClientRect().width || 320), 400));
+        window.google.accounts.id.renderButton(slot, {
+          type: 'standard',
+          theme: 'outline',
+          size: 'large',
+          text: 'continue_with',
+          shape: 'rectangular',
+          logo_alignment: 'left',
+          width: w,
+          locale: lang === 'ar' ? 'ar' : 'en'
+        });
+        slot.setAttribute('aria-label', t('continueWithGoogle'));
+      }).catch(() => { if (err) err.textContent = t('googleUnavailable'); });
+    }
   };
   const done = async () => { await ctx.refreshMe(); toast(t('welcome'), 'ok'); ctx.navigate(next.startsWith('#/login') ? '#/feed' : next); };
   draw();

@@ -34,6 +34,17 @@ export function prefsButtons() {
   <button class="icon-btn" data-act="theme" aria-label="${esc(t('theme'))}">${icon(theme() === 'dark' ? 'sun' : 'moon', { size: 20 })}</button>`;
 }
 export const brandHTML = (size = 28) => `<span class="brand">${logoMark(size)}<span class="brand-name">${esc(brandName())}</span></span>`;
+export const legalLinksHTML = () => `<footer class="legal-foot"><a href="/privacy">${esc(t('privacyPolicy'))}</a><span aria-hidden="true">·</span><a href="/terms">${esc(t('termsOfUse'))}</a></footer>`;
+
+function renderLegalFoot(view, hide) {
+  document.getElementById('legalFoot')?.remove();
+  if (hide || !view) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'legalFoot';
+  wrap.innerHTML = legalLinksHTML();
+  view.append(wrap);
+}
+
 
 function renderDemoNotice() {
   let el = document.getElementById('demoNotice');
@@ -67,13 +78,14 @@ async function route() {
   const view = $('#view'); view.innerHTML = '<div class="loading" aria-busy="true"><span class="spinner"></span></div>'; view.scrollTop = 0; window.scrollTo(0, 0);
   ctx.me = await api.currentUser();
   await renderNav(); renderDemoNotice();
-  if (!loader) { view.innerHTML = `<div class="page"><p class="empty">${esc(t('notFound'))}</p></div>`; return; }
+  if (!loader) { view.innerHTML = `<div class="page"><p class="empty">${esc(t('notFound'))}</p></div>`; renderLegalFoot(view, false); return; }
   const mod = await loader();
   if (id !== renderId) return;
   const el = document.createElement('div'); el.className = 'view-inner';
   view.innerHTML = ''; view.append(el);
   cleanup = (await mod.render(el, params, ctx)) || null;
   el.querySelector('h1')?.setAttribute('tabindex', '-1');
+  renderLegalFoot(view, IMMERSIVE.has(name) || name === 'login');
 }
 
 document.addEventListener('click', (e) => {

@@ -51,6 +51,12 @@ before(async () => {
 });
 after(() => { srv?.kill('SIGTERM'); fs.rmSync(upl, { recursive: true, force: true }); });
 
+test('config hides Google sign-in when GOOGLE_CLIENT_ID is unset', async () => {
+  const r = await new Client().get('/config');
+  assert.equal(r.status, 200);
+  assert.ok(!r.body.googleClientId);
+});
+
 test('unauthenticated users cannot change data or read private endpoints', async () => {
   const anon = new Client();
   for (const [m, p] of [['GET', '/me/settings'], ['PATCH', '/me/settings'], ['GET', '/me/blocks'], ['GET', '/me/follow-requests'], ['POST', '/reports'], ['GET', '/admin/reports'], ['POST', '/auth/password']]) {
@@ -228,4 +234,27 @@ test('policy page and links are served', async () => {
   const text = await (await fetch(root + '/js/policy-text.js')).text();
   assert.ok(text.includes('لا تستلم أموال المشتريات'));
   for (const v of ['stores.js', 'checkout.js', 'settings.js', 'feed.js']) assert.ok((await (await fetch(root + '/js/views/' + v)).text()).includes('#/policy'), v);
+});
+
+test('privacy and terms pages are served at pretty and .html URLs and linked from the app', async () => {
+  const root = BASE.replace(/\/api$/, '');
+  for (const p of ['/privacy', '/privacy.html', '/terms', '/terms.html']) {
+    const res = await fetch(root + p);
+    assert.equal(res.status, 200, p);
+    const html = await res.text();
+    assert.ok(html.includes('جميع الحقوق محفوظة © 2026 وطن النهار'), p);
+    assert.ok(html.includes('lang="en"') && html.includes('dir="ltr"'), p);
+  }
+  const privacy = await (await fetch(root + '/privacy')).text();
+  for (const s of ['البريد الإلكتروني', 'اسم المستخدم', 'Google', 'صورة الملف الشخصي', 'المقاطع', 'التعليقات', 'المتاجر', 'لا تبيع', 'خادمنا', 'aaaaaaaasa2112@gmail.com', 'كوكيز', 'Deletion requests', 'We do not sell']) {
+    assert.ok(privacy.includes(s), 'privacy missing: ' + s);
+  }
+  const terms = await (await fetch(root + '/terms')).text();
+  assert.ok(terms.includes('شروط الاستخدام') && terms.includes('Terms of Use') && terms.includes('تؤجّر مساحة المتجر فقط'));
+  const settings = await (await fetch(root + '/js/views/settings.js')).text();
+  assert.ok(settings.includes('href="/privacy"') && settings.includes('href="/terms"'));
+  const app = await (await fetch(root + '/js/app.js')).text();
+  assert.ok(app.includes('/privacy') && app.includes('/terms'));
+  const auth = await (await fetch(root + '/js/views/auth.js')).text();
+  assert.ok(auth.includes('legalLinksHTML'));
 });

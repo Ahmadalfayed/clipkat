@@ -21,5 +21,6 @@ export const config = {
   webhookSecret: env.WEBHOOK_SECRET || '',
   rateAuthMax: num(env.RATE_AUTH_MAX, 20),
   rateApiMax: num(env.RATE_API_MAX, 600),
-  sessionDays: 30
+  sessionDays: 30,
+  googleClientId: (env.GOOGLE_CLIENT_ID || '').trim()
 };

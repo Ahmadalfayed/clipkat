@@ -512,3 +512,17 @@ bdi[dir="ltr"] { direction: ltr; unicode-bidi: isolate; }
 .cam-hud { text-align: center; margin-top: 6px; font-weight: 800; }
 .studio .chips { flex-wrap: wrap; }
 
+.auth-or { display: flex; align-items: center; gap: 12px; margin: 4px 0 2px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--border, rgba(127,127,127,.35)); }
+.google-auth { display: grid; gap: 10px; justify-items: stretch; }
+.google-btn-slot { min-height: 44px; display: flex; justify-content: center; }
+.google-btn-slot > div, .google-btn-slot iframe { width: 100% !important; max-width: 100%; }
+.btn-google { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; background: #fff; color: #1f1f1f; border: 1px solid rgba(0,0,0,.12); font-weight: 700; }
+.btn-google .g-icon { width: 18px; height: 18px; flex: 0 0 auto; }
+
+.legal-foot { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 18px 16px 8px; padding: 0; color: var(--muted); font-size: 13px; font-weight: 700; }
+.legal-foot a { color: var(--muted); text-decoration: none; }
+.legal-foot a:hover { color: var(--text); text-decoration: underline; }
+#legalFoot { position: relative; z-index: 5; padding-bottom: 4px; }
+#legalFoot[hidden] { display: none !important; }
+#app.immersive #legalFoot { display: none !important; }

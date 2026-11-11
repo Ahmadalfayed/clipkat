@@ -16,6 +16,7 @@ import { publishDue } from './publisher.js';
 import { imageUpload, videoUpload, audioUpload, sniffImage, sniffVideo, place, rm, rid, makePoster, dirs } from './uploads.js';
 import { sniffAudio, probe, extractAudio } from './media.js';
 import { activateRental, cancelRental, slots, notify } from './rentals.js';
+import { verifyGoogleIdToken, baseUsernameFromGoogle, uniqueUsername, unusablePasswordHash } from './google.js';
 
 export const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const need = (v) => { if (!v) throw new HttpError(404, 'notfound'); return v; };
@@ -29,7 +30,7 @@ export function buildRouter() {
   r.use(loadUser);
 
   r.get('/health', h(async (_q, res) => { await q('select 1'); res.json({ ok: true }); }));
-  r.get('/config', (_req, res) => res.json({ maxVideoMb: config.maxVideoMb, maxImageMb: config.maxImageMb, maxSoundMb: config.maxSoundMb, maxSoundSec: config.maxSoundSec, maxVideoSec: config.maxVideoSec, storePolicyVersion: STORE_POLICY_VERSION }));
+  r.get('/config', (_req, res) => res.json({ maxVideoMb: config.maxVideoMb, maxImageMb: config.maxImageMb, maxSoundMb: config.maxSoundMb, maxSoundSec: config.maxSoundSec, maxVideoSec: config.maxVideoSec, storePolicyVersion: STORE_POLICY_VERSION, googleClientId: config.googleClientId || '' }));
   r.get('/policy/store-rental', (_req, res) => res.json({ policy: 'store-rental', version: STORE_POLICY_VERSION }));
   // لا إيجار بدون قبول صريح لإصدار السياسة الحالي — يُسجَّل في نفس المعاملة
   const requirePolicy = (b) => { if (b?.acceptPolicy !== STORE_POLICY_VERSION) throw bad('policyRequired'); };
@@ -62,6 +63,34 @@ export function buildRouter() {
     // نُجري عملية التجزئة حتى لو المستخدم غير موجود (لتقليل تسريب الوقت)
     const ok = row ? await verifyPassword(password, row.password_hash) : (await verifyPassword(password, 'scrypt$16384$AAAAAAAAAAAAAAAAAAAAAA==$AAAA'), false);
     if (!ok || row.is_banned) throw new HttpError(401, 'bad');
+    setSession(res, row);
+    res.json({ user: await profileById(row.id) });
+  }));
+  r.post('/auth/google', authLimit, h(async (req, res) => {
+    const { sub, email, name } = await verifyGoogleIdToken(req.body?.credential);
+    const bySub = (await q('select * from profiles where google_sub = $1', [sub])).rows[0];
+    let row = bySub || (await q('select * from profiles where lower(email) = $1', [email])).rows[0];
+    if (row) {
+      if (row.is_banned) throw new HttpError(401, 'bad');
+      if (row.google_sub && row.google_sub !== sub) throw new HttpError(409, 'googleLinked');
+      if (!row.google_sub) {
+        try { row = (await q('update profiles set google_sub = $1 where id = $2 and google_sub is null returning *', [sub, row.id])).rows[0] || row; }
+        catch (e) { if (e.code === '23505') throw new HttpError(409, 'googleLinked'); throw e; }
+      }
+    } else {
+      const username = await uniqueUsername(q, baseUsernameFromGoogle({ email, name }));
+      const display = name || username;
+      try {
+        row = (await q('insert into profiles (email, password_hash, username, name, google_sub) values ($1,$2,$3,$4,$5) returning *',
+          [email, unusablePasswordHash(), username, display, sub])).rows[0];
+      } catch (e) {
+        if (e.code === '23505') throw new HttpError(409, /email/.test(e.constraint || '') ? 'emailTaken' : 'taken');
+        throw e;
+      }
+      await notify(pool, { userId: row.id, type: 'system', text: 'أهلاً بك في كليب كات 🎉' });
+      setSession(res, row);
+      return res.status(201).json({ user: await profileById(row.id) });
+    }
     setSession(res, row);
     res.json({ user: await profileById(row.id) });
   }));

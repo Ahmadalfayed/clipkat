@@ -343,3 +343,9 @@ create index if not exists videos_source_clip_idx on videos (source_clip_id, cre
 
 alter table notifications drop constraint if exists notifications_type_check;
 alter table notifications add constraint notifications_type_check check (type in ('like','comment','follow','system','follow_request','follow_accept','reply','remix'));
+
+-- =====================================================================
+--  الدخول بحساب Google — إضافات فقط
+-- =====================================================================
+alter table profiles add column if not exists google_sub text;
+create unique index if not exists profiles_google_sub_uidx on profiles (google_sub) where google_sub is not null;
