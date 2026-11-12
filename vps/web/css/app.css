@@ -731,3 +731,7 @@ html.in-call body { overflow: hidden; }
 .tl-coins { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; white-space: nowrap; }
 .seg-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
 .gift-admin .kpi small { display: block; font-size: 11px; color: var(--muted); white-space: normal; }
+/* حين يكون درج الهدايا مفتوحاً تظهر حركة الهدية فوقه لا خلفه */
+.gift-tray.open ~ .gift-fx { inset: 0 0 46% 0; }
+.gift-tray.open ~ .gift-fx .gfx-emoji { font-size: 96px; }
+.gift-tray.open ~ .gift-fx .gfx-cap { top: calc(50% + 70px); }
