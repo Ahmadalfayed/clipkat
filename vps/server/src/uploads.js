@@ -43,6 +43,22 @@ export function place(tmpFile, kind, uid, name) {
   fs.renameSync(tmpFile, path.join(dir, name));
   return `/uploads/${kind}/${uid}/${name}`;
 }
+// حذف كل ملفات مقطع من القرص: الفيديو الحالي، الأصل قبل التحويل، بقايا التحويل، والصورة المصغّرة.
+// لا يلمس إلا ملفات تخص هذا المقطع بالاسم (معرّفه) داخل مجلد صاحبه.
+const UUIDISH = /^[0-9a-f-]{36}$/i;
+export function removeVideoFiles(v) {
+  const removed = [];
+  const inUploads = (f) => { const r = path.resolve(f); return r.startsWith(path.resolve(config.uploadDir) + path.sep) ? r : null; };
+  const kill = (f) => { const r = f && inUploads(f); if (r && fs.existsSync(r)) { rm(r); if (!fs.existsSync(r)) removed.push(r); } };
+  const fromUrl = (u) => (typeof u === 'string' && u.startsWith('/uploads/') && !u.includes('..') ? path.join(config.uploadDir, u.replace(/^\/uploads\/?/, '')) : null);
+  kill(fromUrl(v.video_path)); kill(fromUrl(v.video_url)); kill(fromUrl(v.poster_url));
+  if (UUIDISH.test(String(v.id)) && UUIDISH.test(String(v.user_id))) {
+    const scan = (dir, match) => { try { for (const f of fs.readdirSync(dir)) if (match(f)) kill(path.join(dir, f)); } catch {} };
+    scan(path.join(dirs.videos, v.user_id), (f) => f.startsWith(`${v.id}.`) || f.startsWith(`.${v.id}.`));
+    scan(path.join(dirs.images, v.user_id), (f) => f.startsWith(`poster-${v.id}.`) || f.startsWith(`poster-${v.id}-`));
+  }
+  return removed;
+}
 export const rid = () => crypto.randomBytes(8).toString('hex');
 
 // صورة مصغّرة من الفيديو عبر ffmpeg (اختياري: إن لم يوجد ffmpeg نتجاهل بهدوء)

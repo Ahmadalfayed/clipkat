@@ -735,3 +735,11 @@ html.in-call body { overflow: hidden; }
 .gift-tray.open ~ .gift-fx { inset: 0 0 46% 0; }
 .gift-tray.open ~ .gift-fx .gfx-emoji { font-size: 96px; }
 .gift-tray.open ~ .gift-fx .gfx-cap { top: calc(50% + 70px); }
+
+/* ===== حذف الفيديو ===== */
+.vcell-link { display: block; width: 100%; height: 100%; color: inherit; }
+.vmore { position: absolute; top: 4px; inset-inline-start: 4px; z-index: 2; width: 30px; height: 30px; border-radius: 50%; border: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); color: #fff; font-size: 18px; line-height: 1; cursor: pointer; backdrop-filter: blur(4px); }
+.vmore:active { transform: scale(.9); }
+.btn.del-video { color: var(--danger); font-weight: 800; border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+.confirm-text { font-size: 16px; font-weight: 700; text-align: center; margin: 4px 0 16px; line-height: 1.6; }
+.confirm-acts { display: flex; flex-direction: column; gap: 8px; }

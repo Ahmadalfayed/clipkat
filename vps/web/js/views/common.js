@@ -5,8 +5,33 @@ import { prefsButtons } from '../app.js';
 export function pageHead(title, { back = true, extra = '' } = {}) {
   return `<header class="page-head">${back ? `<button class="icon-btn" data-act="back" aria-label="${esc(t('back'))}">${icon('back', { size: 22, cls: 'flip-rtl' })}</button>` : '<span class="ph-spacer"></span>'}<h1>${esc(title)}</h1><div class="ph-tools">${extra}${prefsButtons()}</div></header>`;
 }
-export function videoGrid(videos, { from = '' } = {}) {
-  return `<div class="vgrid">${videos.map((v) => `<a class="vcell" href="#/watch/${v.id}${from}" aria-label="${esc(v.caption)}"><img src="${esc(v.poster || '')}" alt="" loading="lazy"><span class="vviews">${icon('play', { size: 12, fill: true })} ${esc(fmtViews(v))}</span>${v.productIds?.length ? `<span class="vshop">${icon('bag', { size: 12 })}</span>` : ''}</a>`).join('')}</div>`;
+export function videoGrid(videos, { from = '', own = false } = {}) {
+  const inner = (v) => `<img src="${esc(v.poster || '')}" alt="" loading="lazy"><span class="vviews">${icon('play', { size: 12, fill: true })} ${esc(fmtViews(v))}</span>${v.productIds?.length ? `<span class="vshop">${icon('bag', { size: 12 })}</span>` : ''}`;
+  return `<div class="vgrid">${videos.map((v) => own
+    ? `<div class="vcell" data-vid="${esc(v.id)}"><a class="vcell-link" href="#/watch/${v.id}${from}" aria-label="${esc(v.caption)}">${inner(v)}</a><button class="vmore" data-vmore="${esc(v.id)}" aria-label="${esc(t('videoOptions'))}">⋯</button></div>`
+    : `<a class="vcell" href="#/watch/${v.id}${from}" aria-label="${esc(v.caption)}">${inner(v)}</a>`).join('')}</div>`;
+}
+// حذف فيديو يملكه المستخدم: رسالة تأكيد عربية ثم الحذف من الخادم. يرجع true عند النجاح.
+export function confirmDialog({ title, text, ok, cancel = t('cancel') }) {
+  return new Promise((resolve) => {
+    let done = false; const finish = (v) => { if (done) return; done = true; resolve(v); };
+    const body = document.createElement('div'); body.className = 'confirm-box';
+    body.innerHTML = `<p class="confirm-text">${esc(text)}</p><div class="confirm-acts"><button class="btn danger block lg" data-ok>${icon('trash', { size: 18 })} ${esc(ok)}</button><button class="btn ghost block" data-no>${esc(cancel)}</button></div>`;
+    const sh = openSheet({ title, body, cls: 'confirm-sheet', onClose: () => finish(false) });
+    body.querySelector('[data-ok]').onclick = () => { finish(true); sh.close(); };
+    body.querySelector('[data-no]').onclick = () => sh.close();
+    setTimeout(() => body.querySelector('[data-no]')?.focus(), 80);   // التركيز على «إلغاء» حتى لا يحذف Enter بالخطأ
+  });
+}
+export async function deleteMyVideo(id) {
+  if (!(await confirmDialog({ title: t('deleteVideo'), text: t('deleteVideoQ'), ok: t('deleteVideo') }))) return false;
+  try { await api.deleteVideo(id); toast(t('videoDeleted'), 'ok'); return true; }
+  catch (e) { toast(t(e.status === 403 ? 'deleteVideoForbidden' : 'deleteVideoFail'), 'err'); return false; }
+}
+export function videoOptionsSheet(id, onDeleted) {
+  const sh = openSheet({ title: t('videoOptions'), body: `<div class="menu-list"><a class="btn block ghost" href="#/watch/${esc(id)}">${icon('play', { size: 16 })} ${esc(t('watchVideo'))}</a><button class="btn block ghost bad del-video" data-m="delete">${icon('trash', { size: 16 })} ${esc(t('deleteVideo'))}</button></div>` });
+  sh.body.querySelector('[data-m=delete]').onclick = async () => { sh.close(); if (await deleteMyVideo(id)) onDeleted?.(id); };
+  sh.body.querySelector('a').onclick = () => sh.close();
 }
 import { fmtNum } from '../i18n.js';
 const fmtViews = (v) => fmtNum((v.base?.views || 0) + 1);

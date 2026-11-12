@@ -140,13 +140,23 @@ export async function processVideo(id) {
     }
     const up = await q("update videos set video_path = $2, video_url = $2, poster_url = $3, poster_auto = $4, media_status = 'ready', media_error = null where id = $1 and media_status in ('processing','reprocess') returning id",
       [id, url, poster, poster !== row.poster_url ? true : row.poster_auto]);
-    if (!up.rowCount) { rm(finalPath); return null; }      // حُذف المقطع أثناء التحويل
+    if (!up.rowCount) {                                    // حُذف المقطع أثناء التحويل: نحذف كل ما أنتجناه
+      rm(finalPath); rm(input); if (poster && poster !== row.poster_url) rm(abs(poster));
+      console.log(`[transcode] ${id} deleted during conversion — outputs removed`);
+      return null;
+    }
     if (path.resolve(input) !== path.resolve(finalPath)) rm(input);   // حذف الأصل لتوفير المساحة
     if (wasHidden && row.status === 'published' && row.source_clip_id) await notifyRemix(row).catch(() => {});
     const r = { id, mode, ms: Date.now() - t0 };
     console.log(`[transcode] ${id} ${mode} in ${(r.ms / 1000).toFixed(1)}s`);
     return r;
   } catch (e) {
+    // حُذف المقطع أثناء التحويل (حذف صاحبه الملفات): ليس فشلاً — نحذف أي بقايا ونتجاهل
+    if (!(await q('select 1 from videos where id = $1', [id]).catch(() => ({ rowCount: 1 }))).rowCount) {
+      try { const dir = path.dirname(input); for (const f of fs.readdirSync(dir)) if (f.startsWith(`.${id}.`) || f === `${id}.mp4`) rm(path.join(dir, f)); } catch {}
+      console.log(`[transcode] ${id} deleted during conversion — skipped`);
+      return null;
+    }
     console.warn(`[transcode] ${id} failed:`, e.message, e.stderr || '');
     // عند الفشل نُبقي الأصل ونُظهره كما هو
     await q("update videos set media_status = 'failed', media_error = $2 where id = $1", [id, String(e.message || 'failed').slice(0, 200)]);

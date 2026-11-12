@@ -316,6 +316,10 @@ Object.assign(en, {
   granted: 'Granted {n} coins to @{u} — balance {b}', noSuchUser: 'User not found', grantFail: 'Grant failed'
 });
 
+// ===== حذف الفيديو (© 2026 وطن النهار) =====
+Object.assign(ar, { deleteVideo: 'حذف الفيديو', deleteVideoQ: 'متأكد تبي تحذف هالفيديو؟ ما تقدر ترجعه', videoDeleted: 'تم حذف الفيديو', deleteVideoFail: 'تعذّر حذف الفيديو — حاول مرة ثانية', deleteVideoForbidden: 'ما تقدر تحذف فيديو غيرك', videoOptions: 'خيارات الفيديو', watchVideo: 'مشاهدة الفيديو' });
+Object.assign(en, { deleteVideo: 'Delete video', deleteVideoQ: 'Are you sure you want to delete this video? This cannot be undone.', videoDeleted: 'Video deleted', deleteVideoFail: 'Could not delete the video — try again', deleteVideoForbidden: 'You can only delete your own videos', videoOptions: 'Video options', watchVideo: 'Watch video' });
+
 export let lang = localStorage.getItem('ck:lang') || 'ar';
 export const brandName = () => BRAND[lang];
 

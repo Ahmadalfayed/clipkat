@@ -1,7 +1,7 @@
 import { api } from '../services/index.js';
 import { t, fmtNum } from '../i18n.js';
 import { icon, esc, $, toast, openSheet, avatarOf, fileToDataURL, storeLogo, emptyState, verifiedBadge } from '../ui.js';
-import { pageHead, videoGrid, openReportSheet, confirmBlock } from './common.js';
+import { pageHead, videoGrid, openReportSheet, confirmBlock, videoOptionsSheet } from './common.js';
 import { callButtons, wireCallButtons } from '../calls.js';
 import { rtcConfig, rq } from '../rtc.js';
 
@@ -45,9 +45,18 @@ export async function render(el, params, ctx) {
       ${own ? `<a role="tab" href="${base}?tab=saved" class="${tab === 'saved' ? 'on' : ''}" aria-selected="${tab === 'saved'}">${icon('bookmark', { size: 16 })} ${esc(t('saved'))}</a>
       <a role="tab" href="${base}?tab=liked" class="${tab === 'liked' ? 'on' : ''}" aria-selected="${tab === 'liked'}">${icon('heart', { size: 16 })} ${esc(t('liked'))}</a>` : ''}
     </div>
-    ${locked ? emptyState(rel.blockedByMe ? t('blockedProfile') : t('privateProfile'), rel.blockedByMe ? '' : t('privateProfileSub')) : vids.length ? videoGrid(vids) : emptyState(t('noVideos'), '', own && tab === 'videos' ? `<a class="btn primary" href="#/upload">${esc(t('upload'))}</a>` : '')}
+    ${locked ? emptyState(rel.blockedByMe ? t('blockedProfile') : t('privateProfile'), rel.blockedByMe ? '' : t('privateProfileSub')) : vids.length ? videoGrid(vids, { own: own && tab === 'videos' && api.social }) : emptyState(t('noVideos'), '', own && tab === 'videos' ? `<a class="btn primary" href="#/upload">${esc(t('upload'))}</a>` : '')}
   </div>`;
 
+  // خيارات مقاطعي (حذف الفيديو) — تظهر لصاحب الحساب فقط
+  el.querySelector('.vgrid')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-vmore]'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    videoOptionsSheet(b.dataset.vmore, (id) => {
+      el.querySelector(`.vcell[data-vid="${CSS.escape(id)}"]`)?.remove();
+      if (!el.querySelector('.vgrid .vcell')) ctx.rerender();
+    });
+  });
   // أزرار الاتصال (للمتابعين المتبادلين أو من بينهم محادثة) + شارة «مباشر» إن كان يبث الآن
   (async () => {
     const box = $('#pfCall', el); if (!box || !api.social) return;

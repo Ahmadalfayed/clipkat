@@ -14,7 +14,7 @@ import { visibleSql, notBlockedSql, isBlockedBetween, canSeeUserContent, COMMENT
 import { assertCanRemix, enrichRemix, notifyRemix } from './remix.js';
 import { forYou, parseCursor } from './feed.js';
 import { publishDue } from './publisher.js';
-import { imageUpload, videoUpload, audioUpload, sniffImage, sniffVideo, place, rm, rid, makePoster, dirs } from './uploads.js';
+import { imageUpload, videoUpload, audioUpload, sniffImage, sniffVideo, place, rm, rid, makePoster, dirs, removeVideoFiles } from './uploads.js';
 import { sniffAudio, probe, extractAudio } from './media.js';
 import { activateRental, cancelRental, slots, notify } from './rentals.js';
 import { buildRtcRouter } from './rtc.js';
@@ -392,10 +392,18 @@ export function buildRouter() {
     } finally { tmp.forEach(rm); if (!committed) placed.forEach(rmUrl); }
   }));
 
+  // حذف مقطع: صاحبه فقط (أو المشرف للإشراف). الإعجابات والتعليقات والحفظ والإشعارات تُحذف معه (ON DELETE CASCADE)،
+  // ومقاطع الديويتو/الستيتش المبنية عليه تبقى وتظهر «المصدر غير متاح». ثم تُحذف ملفاته من القرص.
+  // إن كان قيد التحويل: مهمة التحويل تكتشف أن الصف حُذف فتحذف مخرجاتها (انظر processVideo).
   r.delete('/videos/:id', requireUser, h(async (req, res) => {
     const id = uid(req.params.id);
-    const d = await q('delete from videos where id = $1 and (user_id = $2 or $3) returning 1', [id, req.user.id, !!req.user.is_admin]);
-    if (!d.rowCount) throw new HttpError(403, 'forbidden'); res.json({ ok: true });
+    const v = (await q('select id, user_id, video_path, video_url, poster_url from videos where id = $1', [id])).rows[0];
+    if (!v) throw new HttpError(404, 'notfound');
+    if (v.user_id !== req.user.id && !req.user.is_admin) throw new HttpError(403, 'forbidden');
+    const d = await q('delete from videos where id = $1 returning id', [id]);
+    if (!d.rowCount) throw new HttpError(404, 'notfound');
+    const removed = removeVideoFiles(v);
+    res.json({ ok: true, filesRemoved: removed.length });
   }));
   r.get('/me/drafts', requireUser, h(async (req, res) => {
     res.json(await queryVideos(req.user, ["v.user_id = $1", "v.status in ('draft','scheduled')"], [req.user.id], 100, { includeUnpublished: true }));

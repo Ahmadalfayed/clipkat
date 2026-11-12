@@ -3,7 +3,7 @@ import { rtcConfig, rq } from '../rtc.js';
 import { t, fmtNum, fmtKWD, timeAgo, lang } from '../i18n.js';
 import { icon, esc, $, $$, toast, openSheet, avatarOf, productImg, emptyState, verifiedBadge } from '../ui.js';
 import { prefsButtons, brandHTML } from '../app.js';
-import { openReportSheet, confirmBlock } from './common.js';
+import { openReportSheet, confirmBlock, deleteMyVideo } from './common.js';
 import { POLICY } from '../policy-text.js';
 
 let muted = true; // يبدأ صامتاً (سياسة التشغيل التلقائي في المتصفحات)
@@ -108,6 +108,18 @@ export async function render(el, params, ctx) {
     io.observe(sl);
   }
   slideEls().forEach(hookSlide);
+  // بعد حذف صاحب المقطع له: يختفي فوراً من الواجهة وننتقل للمقطع التالي
+  function removeSlide(id) {
+    byId.delete(id);
+    const sl = feed.querySelector(`.slide[data-id="${CSS.escape(id)}"]`);
+    let next = null;
+    if (sl) {
+      const vEl = $('video', sl); try { vEl.pause(); vEl.removeAttribute('src'); vEl.load(); } catch {}
+      io.unobserve(sl); next = sl.nextElementSibling || sl.previousElementSibling; sl.remove();
+    }
+    if (!slideEls().length) { ctx.navigate(ctx.me ? `#/profile/${ctx.me.id}` : '#/feed'); return; }
+    if (next) { next.scrollIntoView({ block: 'start' }); if (mode === 'watch') history.replaceState(null, '', `#/watch/${next.dataset.id}${location.hash.includes('?') ? location.hash.slice(location.hash.indexOf('?')) : ''}`); }
+  }
 
   // مقاطع صاحبها قيد التجهيز: نتحقق كل 8 ثوانٍ ونبدّل للملف الجاهز تلقائياً
   const procTimer = setInterval(async () => {
@@ -223,6 +235,7 @@ export async function render(el, params, ctx) {
       <button class="btn block ghost" data-m="copy">${esc(t('copyLink'))}</button>
       ${s.v.soundId ? `<a class="btn block ghost" href="#/upload?sound=${s.v.soundId}" data-m="use">${esc(t('useSound'))}</a>` : (api.social ? `<button class="btn block ghost" data-m="extract">${esc(t('useSound'))}</button>` : '')}
       ${s.v.remixCount ? `<button class="btn block ghost" data-m="remixes">${esc(t('remixes'))} (${s.v.remixCount})</button>` : ''}
+      ${api.social && own ? `<button class="btn block ghost bad del-video" data-m="delete">${icon('trash', { size: 16 })} ${esc(t('deleteVideo'))}</button>` : ''}
       ${api.social && !own ? `<button class="btn block ghost" data-m="report">${esc(t('reportVideo'))}</button><button class="btn block ghost bad" data-m="block">${esc(t('block'))} <bdi dir="ltr">@${esc(s.user?.username)}</bdi></button>` : ''}</div>` });
     sh.body.addEventListener('click', async (e) => {
       const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return; sh.close();
@@ -230,6 +243,7 @@ export async function render(el, params, ctx) {
       if (m === 'use') return;
       if (m === 'duet' || m === 'stitch') { if (!(await ctx.requireLogin())) return; ctx.navigate(`#/upload?${m}=${s.v.id}`); return; }
       if (m === 'remixes') { openRemixes(s.v); return; }
+      if (m === 'delete') { if (own && await deleteMyVideo(s.v.id)) removeSlide(s.v.id); return; }
       if (!(await ctx.requireLogin())) return;
       if (m === 'extract') {
         try { const snd = await api.extractSound(s.v.id, s.v.sound || s.v.caption); ctx.navigate('#/upload?sound=' + snd.id); }
