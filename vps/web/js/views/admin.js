@@ -53,6 +53,11 @@ export async function render(el, params, ctx) {
         <td data-label="${esc(t('reporter'))}"><bdi dir="ltr">@${esc(ru?.username)}</bdi></td>
         <td data-label="${esc(t('status'))}">${x.status === 'open' ? acts.map((a) => `<button class="btn sm ${a === 'dismiss' ? 'ghost' : 'primary'}" data-res="${x.id}" data-action="${a}">${esc(t('a_' + a))}</button>`).join(' ') : esc(t('a_' + x.action))}</td></tr>`; }).join('')}</tbody></table></div>` : emptyState(t('noReports'))}` : ''}
   </div>`;
+  // العملات وهدايا البث (خادم فقط)
+  if (api.mode !== 'local') {
+    const gbox = document.createElement('div'); gbox.className = 'gift-admin'; el.querySelector('.dash-grid')?.after(gbox);
+    import('./wallet.js').then((m) => m.renderGiftAdmin(gbox)).catch((e) => console.warn('[gifts admin]', e));
+  }
   el.querySelectorAll('[data-res]').forEach((b) => b.addEventListener('click', async () => {
     if (b.dataset.action !== 'dismiss' && !confirm(t('a_' + b.dataset.action) + '?')) return;
     b.disabled = true; try { await api.resolveReport(b.dataset.res, b.dataset.action); toast(t('saved_ok'), 'ok'); ctx.rerender(); } catch (e) { toast(e.message, 'warn'); b.disabled = false; }

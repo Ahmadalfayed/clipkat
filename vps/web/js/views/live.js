@@ -3,6 +3,7 @@ import { t, lang } from '../i18n.js';
 import { icon, esc, $, toast, openSheet, avatarOf } from '../ui.js';
 import { loadLK, rq, rtcConfig, getMedia, inlineVideo, fmtDur, keepAwake, unlockAudio } from '../rtc.js';
 import { makeRecorder, finishBlob, recorderSupported } from '../studio-export.js';
+import { showGiftFx, renderTop, topChipHTML, openTopSheet, openGiftTray, fmtInt } from '../gifts.js';
 
 const SEG_SEC = 60;            // تسجيل محلي متدحرج: مقاطع دقيقة واحدة، نحتفظ بما يغطي آخر 3 دقائق
 const HEART_FLUSH_MS = 800;
@@ -24,11 +25,13 @@ function stageHTML({ host, me, isHost }) {
       <span class="live-badge" id="lvBadge" ${isHost ? 'hidden' : ''}>${esc(t('liveNow'))} <time id="lvTimer" dir="ltr"></time></span>
       <span class="live-viewers" id="lvViewers" aria-live="polite">${icon('eye', { size: 15 })} <b dir="ltr">0</b></span>
     </div>
+    <div class="live-sub">${topChipHTML()}</div>
     <div class="live-banner" id="lvBanner" hidden></div>
     <div class="live-comments" id="lvComments" aria-live="polite"></div>
     <div class="live-hearts" id="lvHearts" aria-hidden="true"></div>
     <button class="live-unmute" id="lvUnmute" hidden>${icon('volOn', { size: 18 })} ${esc(t('tapForSound'))}</button>
     <div class="live-bottom" id="lvBottom">${isHost ? '' : (me ? `<form class="live-input" id="lvForm"><input name="text" maxlength="200" autocomplete="off" placeholder="${esc(t('liveComment'))}" aria-label="${esc(t('liveComment'))}"><button class="icon-btn" aria-label="${esc(t('send'))}">${icon('share', { size: 18, cls: 'flip-rtl' })}</button></form>` : `<a class="btn sm glass" href="#/login?next=${encodeURIComponent(location.hash)}">${esc(t('login'))}</a>`)}
+      ${isHost || !me ? '' : `<button class="live-gift-btn" id="lvGift" aria-label="${esc(t('sendGift'))}">${icon('gift', { size: 24 })}</button>`}
       ${isHost ? '' : `<button class="live-heart-btn" id="lvHeart" aria-label="${esc(t('hearts'))}">${icon('heart', { size: 26, fill: true })}</button>`}</div>
   </div>`;
 }
@@ -76,6 +79,7 @@ function onData(state, LK) {
     else if (m.t === 'comment-del') state.delComments(m.ids || []);
     else if (m.t === 'hearts') { if (m.from !== state.meId || state.isHost) floatHeart(state.heartsBox, m.n); state.hearts += m.n; }
     else if (m.t === 'viewers') state.setViewers(m.n);
+    else if (m.t === 'gift' && m.g) { showGiftFx(state.stage, m.g); renderTop(state.el, m.top, m.g.liveDiamonds); state.diamonds = m.g.liveDiamonds; }
     else if (m.t === 'ended') state.onEnded?.(m.reason);
   };
 }
@@ -91,7 +95,8 @@ async function hostView(el, ctx, cfg) {
   if (!(await ctx.requireLogin())) return;
   el.innerHTML = stageHTML({ host: ctx.me, me: ctx.me, isHost: true });
   const stage = $('.live-stage', el); const video = inlineVideo($('#lvVideo', el)); video.classList.add('mirror');
-  const state = { meId: ctx.me.id, isHost: true, canModerate: true, hearts: 0, heartsBox: $('#lvHearts', el), setViewers: setViewersFn(el), peak: 0 };
+  const state = { meId: ctx.me.id, isHost: true, canModerate: true, hearts: 0, heartsBox: $('#lvHearts', el), setViewers: setViewersFn(el), peak: 0, stage, el, diamonds: 0 };
+  $('#lvTopG', el).onclick = () => live && openTopSheet(live.id);
   const sv = state.setViewers; state.setViewers = (n) => { state.peak = Math.max(state.peak, n); sv(n); };
   let stream = null, facing = 'user', room = null, live = null, pub = null, ended = false, t0 = 0, timer = null, releaseWake = null, leaving = false;
   const segs = []; let cur = null;   // التسجيل المحلي المتدحرج
@@ -173,7 +178,8 @@ async function hostView(el, ctx, cfg) {
       releaseWake = await keepAwake();
       wireComments(el, state, live);
       const d = await rq('GET', `/live/${live.id}`).catch(() => null);
-      d?.comments?.forEach(state.addComment); if (d) { state.hearts = d.live.hearts; state.setViewers(d.live.viewers); }
+      d?.comments?.forEach(state.addComment); if (d) { state.hearts = d.live.hearts; state.setViewers(d.live.viewers); state.diamonds = d.live.giftDiamonds || 0; }
+      rq('GET', `/live/${live.id}/gifters`).then((g) => renderTop(el, g.top, g.liveDiamonds)).catch(() => {});
       newSeg(); segTimer = setInterval(newSeg, SEG_SEC * 1000);
       window.addEventListener('beforeunload', onUnload);
     } catch (e) {
@@ -231,8 +237,8 @@ async function hostView(el, ctx, cfg) {
   function showSummary(saved) {
     clearInterval(timer); releaseWake?.();
     const box = document.createElement('div'); box.className = 'live-end';
-    box.innerHTML = `<h2>${esc(t('liveSummary'))}</h2><dl><div><dt>${esc(t('liveDuration'))}</dt><dd dir="ltr">${fmtDur((Date.now() - t0) / 1000)}</dd></div><div><dt>${esc(t('peakViewers'))}</dt><dd>${state.peak}</dd></div><div><dt>${esc(t('hearts'))}</dt><dd>${state.hearts}</dd></div></dl>
-      ${saved ? `<p class="note">${esc(t('saveLiveNote'))}</p>` : ''}<a class="btn primary block" href="#/me">${esc(t('me'))}</a><a class="btn ghost block" href="#/feed">${esc(t('home'))}</a>`;
+    box.innerHTML = `<h2>${esc(t('liveSummary'))}</h2><dl><div><dt>${esc(t('liveDuration'))}</dt><dd dir="ltr">${fmtDur((Date.now() - t0) / 1000)}</dd></div><div><dt>${esc(t('peakViewers'))}</dt><dd>${state.peak}</dd></div><div><dt>${esc(t('hearts'))}</dt><dd>${state.hearts}</dd></div><div><dt>${esc(t('diamonds'))}</dt><dd>💎 ${fmtInt(state.diamonds)}</dd></div></dl>
+      ${saved ? `<p class="note">${esc(t('saveLiveNote'))}</p>` : ''}<a class="btn primary block" href="#/earnings">💎 ${esc(t('myEarnings'))}</a><a class="btn block" href="#/me">${esc(t('me'))}</a><a class="btn ghost block" href="#/feed">${esc(t('home'))}</a>`;
     stage.append(box); $('#lvBottom', el).hidden = true;
   }
   function showEnded(reason) { if (ended) return; ended = true; clearInterval(segTimer); try { cur?.rec.stop(); } catch {} stream?.getTracks().forEach((x) => x.stop()); toast(reason === 'admin' ? t('liveEndedBy') : t('liveEnded')); showSummary(false); }
@@ -259,7 +265,10 @@ async function viewerView(el, id, ctx) {
   el.innerHTML = stageHTML({ host, me: ctx.me, isHost: false });
   const stage = $('.live-stage', el); const video = inlineVideo($('#lvVideo', el));
   const unfit = fitVideo(video);
-  const state = { meId: ctx.me?.id || null, isHost: false, canModerate: d.canModerate, hearts: live.hearts, heartsBox: $('#lvHearts', el), setViewers: setViewersFn(el) };
+  const state = { meId: ctx.me?.id || null, isHost: false, canModerate: d.canModerate, hearts: live.hearts, heartsBox: $('#lvHearts', el), setViewers: setViewersFn(el), stage, el, diamonds: live.giftDiamonds || 0 };
+  $('#lvTopG', el).onclick = () => openTopSheet(live.id);
+  renderTop(el, [], live.giftDiamonds || 0);
+  rq('GET', `/live/${live.id}/gifters`).then((g) => renderTop(el, g.top, g.liveDiamonds)).catch(() => {});
   $('#lvTitle', el).textContent = live.title || '';
   wireComments(el, state, live); d.comments.forEach(state.addComment); state.setViewers(live.viewers);
   const timer = setInterval(() => { $('#lvTimer', el).textContent = fmtDur((Date.now() - live.startedAt) / 1000); }, 1000);
@@ -328,6 +337,7 @@ async function viewerView(el, id, ctx) {
     if (!flushT) flushT = setTimeout(async () => { const n = pendingHearts; pendingHearts = 0; flushT = null; await rq('POST', `/live/${live.id}/hearts`, { n }).catch(() => {}); }, HEART_FLUSH_MS);
   });
 
+  $('#lvGift', el)?.addEventListener('click', () => openGiftTray(stage, { liveId: live.id, onSent: (r) => { showGiftFx(stage, r); renderTop(el, r.top, r.liveDiamonds); } }));
   $('#lvClose', el).onclick = () => (history.length > 1 ? history.back() : ctx.navigate('#/feed'));
   try { await join(); }
   catch (e) { console.warn(e); if (e.status === 410) showEnded(); else { banner(e.status === 429 ? t('liveFull') : t('liveJoinFail')); } }

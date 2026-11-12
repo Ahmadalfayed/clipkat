@@ -33,5 +33,6 @@ export const requireAdmin = (req, _res, next) => (!req.user ? next(new HttpError
 export function csrfGuard(req, _res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   if (req.path.startsWith('/payment-webhook')) return next();
+  if (req.path.startsWith('/coins/webhook/')) return next();     // إشعارات مزوّد دفع العملات (تُتحقق من المزوّد نفسه)
   return req.get('x-ck') === '1' ? next() : next(new HttpError(403, 'csrf'));
 }

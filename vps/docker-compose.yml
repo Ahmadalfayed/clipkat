@@ -45,6 +45,16 @@ services:
       LIVEKIT_API_URL: http://host.docker.internal:7880
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+      # العملات وهدايا البث — PAYMENT_PROVIDER=demo (افتراضي) لا يخصم أي مبلغ حقيقي
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-demo}
+      GIFT_PLATFORM_SHARE: ${GIFT_PLATFORM_SHARE:-50}
+      DIAMOND_VALUE_KWD: ${DIAMOND_VALUE_KWD:-0.0025}
+      PAYOUT_MIN_DIAMONDS: ${PAYOUT_MIN_DIAMONDS:-2000}
+      DEMO_COINS_DAILY_MAX: ${DEMO_COINS_DAILY_MAX:-20000}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      MYFATOORAH_API_KEY: ${MYFATOORAH_API_KEY:-}
+      MYFATOORAH_BASE_URL: ${MYFATOORAH_BASE_URL:-}
+      TAP_SECRET_KEY: ${TAP_SECRET_KEY:-}
     extra_hosts: ["host.docker.internal:host-gateway"]
     volumes:
       - ./data/uploads:/data/uploads

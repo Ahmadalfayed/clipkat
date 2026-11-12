@@ -406,3 +406,123 @@ create index if not exists calls_caller_idx on calls (caller_id, created_at desc
 create index if not exists calls_open_idx on calls (created_at) where status in ('ringing','active');
 
 -- (أنواع الإشعارات 'live' و'call' أُضيفت إلى notifications_type_check أعلاه — قيد واحد فقط حتى يبقى الترحيل قابلاً للتكرار)
+
+-- =====================================================================
+--  العملات والهدايا في البث المباشر (© 2026 وطن النهار)
+--  الربح الوحيد للمنصة من هدايا البث. مبيعات المتاجر بين التاجر والمشتري لا تمر هنا ولا عمولة عليها.
+--  كل الأرصدة تتغير داخل معاملة واحدة مع سطر في سجل الحركات (coin_ledger). لا أرصدة سالبة.
+-- =====================================================================
+create table if not exists coin_packages (
+  id text primary key,
+  coins int not null check (coins > 0),
+  bonus int not null default 0 check (bonus >= 0),
+  price numeric(10,3) not null check (price > 0),     -- بالدينار الكويتي
+  sort int not null default 0,
+  active boolean not null default true
+);
+-- عدّل الباقات والأسعار هنا ثم أعد تشغيل التطبيق
+insert into coin_packages (id, coins, bonus, price, sort) values
+  ('small', 100, 0, 0.300, 1),
+  ('medium', 500, 50, 1.500, 2),
+  ('large', 1000, 200, 3.000, 3)
+on conflict (id) do update set coins = excluded.coins, bonus = excluded.bonus, price = excluded.price, sort = excluded.sort;
+
+create table if not exists gifts (
+  id text primary key check (id ~ '^[a-z0-9_]{2,24}$'),
+  name_ar text not null,
+  name_en text not null,
+  emoji text not null,
+  coins int not null check (coins > 0),
+  tier int not null default 1 check (tier between 1 and 3),   -- 1 صغيرة، 2 متوسطة، 3 كبيرة (حركة ملء الشاشة)
+  sort int not null default 0,
+  active boolean not null default true
+);
+insert into gifts (id, name_ar, name_en, emoji, coins, tier, sort) values
+  ('rose', 'وردة', 'Rose', '🌹', 1, 1, 1),
+  ('heart', 'قلب', 'Heart', '💖', 5, 1, 2),
+  ('coffee', 'فنجان قهوة', 'Coffee', '☕', 10, 1, 3),
+  ('palm', 'نخلة', 'Palm', '🌴', 30, 2, 4),
+  ('crown', 'تاج', 'Crown', '👑', 99, 2, 5),
+  ('falcon', 'صقر', 'Falcon', '🦅', 199, 2, 6),
+  ('car', 'سيارة', 'Sports car', '🏎️', 499, 3, 7),
+  ('rocket', 'صاروخ', 'Rocket', '🚀', 999, 3, 8)
+on conflict (id) do update set name_ar = excluded.name_ar, name_en = excluded.name_en, emoji = excluded.emoji, coins = excluded.coins, tier = excluded.tier, sort = excluded.sort;
+
+create table if not exists wallets (
+  user_id uuid primary key references profiles(id) on delete cascade,
+  coins bigint not null default 0 check (coins >= 0),        -- رصيد العملات للشراء والإهداء
+  diamonds bigint not null default 0 check (diamonds >= 0),  -- أرباح صانع المحتوى من الهدايا
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists coin_purchases (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  package_id text not null references coin_packages(id),
+  coins int not null check (coins > 0),
+  price numeric(10,3) not null check (price >= 0),
+  currency text not null default 'KWD',
+  provider text not null check (provider in ('demo','myfatoorah','tap')),
+  status text not null default 'pending' check (status in ('pending','paid','failed','cancelled')),
+  provider_ref text,
+  idem_key text check (char_length(idem_key) <= 64),
+  created_at timestamptz not null default now(),
+  paid_at timestamptz
+);
+create unique index if not exists coin_purchases_idem_uidx on coin_purchases (user_id, idem_key) where idem_key is not null;
+create index if not exists coin_purchases_user_idx on coin_purchases (user_id, created_at desc);
+
+alter table lives add column if not exists gift_coins bigint not null default 0;
+alter table lives add column if not exists gift_diamonds bigint not null default 0;
+
+create table if not exists live_gifts (
+  id uuid primary key default gen_random_uuid(),
+  live_id uuid not null references lives(id) on delete cascade,
+  sender_id uuid not null references profiles(id) on delete cascade,
+  host_id uuid not null references profiles(id) on delete cascade,
+  gift_id text not null references gifts(id),
+  qty int not null check (qty between 1 and 99),
+  coins int not null check (coins > 0),               -- إجمالي ما دفعه المرسل
+  diamonds int not null check (diamonds >= 0),        -- نصيب المضيف
+  platform_coins int not null check (platform_coins >= 0),
+  client_key text not null check (char_length(client_key) between 8 and 64),   -- يمنع الخصم المزدوج عند إعادة الإرسال
+  created_at timestamptz not null default now(),
+  check (sender_id <> host_id),
+  check (diamonds + platform_coins = coins)
+);
+create unique index if not exists live_gifts_client_uidx on live_gifts (sender_id, client_key);
+create index if not exists live_gifts_live_idx on live_gifts (live_id, created_at desc);
+create index if not exists live_gifts_host_idx on live_gifts (host_id, created_at desc);
+
+create table if not exists payout_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  diamonds bigint not null check (diamonds > 0),
+  amount numeric(10,3) not null check (amount >= 0),          -- القيمة التقديرية بالدينار وقت الطلب
+  method text not null check (method in ('bank','other')),
+  account_name text not null check (char_length(account_name) between 2 and 80),
+  account text not null check (char_length(account) between 4 and 60),   -- IBAN أو رقم الحساب
+  note text not null default '' check (char_length(note) <= 300),
+  status text not null default 'pending' check (status in ('pending','approved','rejected')),
+  demo boolean not null default false,                         -- طُلب أثناء الوضع التجريبي: لا تُحوَّل أموال حقيقية
+  admin_note text not null default '' check (char_length(admin_note) <= 300),
+  decided_by uuid references profiles(id) on delete set null,
+  decided_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists payout_one_pending_uidx on payout_requests (user_id) where status = 'pending';
+create index if not exists payout_status_idx on payout_requests (status, created_at desc);
+
+create table if not exists coin_ledger (
+  id bigserial primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  currency text not null check (currency in ('coins','diamonds')),
+  delta bigint not null check (delta <> 0),
+  balance_after bigint not null check (balance_after >= 0),
+  kind text not null check (kind in ('purchase','grant','gift_sent','gift_received','payout_hold','payout_refund')),
+  ref_id uuid,
+  actor_id uuid references profiles(id) on delete set null,
+  note text not null default '' check (char_length(note) <= 200),
+  created_at timestamptz not null default now()
+);
+create index if not exists coin_ledger_user_idx on coin_ledger (user_id, created_at desc);

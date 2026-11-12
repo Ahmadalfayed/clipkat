@@ -39,5 +39,13 @@ export const config = {
   liveMaxViewers: num(env.LIVE_MAX_VIEWERS, 200),
   callRingSec: num(env.CALL_RING_SEC, 35),
   liveHostGraceSec: num(env.LIVE_HOST_GRACE_SEC, 45),
-  rtcReapMs: num(env.RTC_REAP_MS, 10000)
+  rtcReapMs: num(env.RTC_REAP_MS, 10000),
+  // العملات والهدايا: نصيب المنصة من الهدايا فقط (مبيعات المتاجر لا عمولة عليها)
+  giftPlatformShare: Math.min(100, Math.max(0, Number.isFinite(Number(env.GIFT_PLATFORM_SHARE)) && env.GIFT_PLATFORM_SHARE !== '' && env.GIFT_PLATFORM_SHARE !== undefined ? Number(env.GIFT_PLATFORM_SHARE) : 50)),
+  diamondKwd: num(env.DIAMOND_VALUE_KWD, 0.0025),                // قيمة الألماسة الواحدة عند السحب (د.ك)
+  payoutMinDiamonds: num(env.PAYOUT_MIN_DIAMONDS, 2000),          // أقل سحب = 5 د.ك بالقيمة الافتراضية
+  paymentProvider: ['demo', 'myfatoorah', 'tap'].includes((env.PAYMENT_PROVIDER || '').trim()) ? env.PAYMENT_PROVIDER.trim() : 'demo',
+  demoCoinsDailyMax: num(env.DEMO_COINS_DAILY_MAX, 20000),        // سقف الشحن التجريبي لكل مستخدم يومياً
+  giftRateMax: num(env.GIFT_RATE_MAX, 40),                        // أقصى عدد إرسال هدايا لكل مستخدم في 10 ثوانٍ
+  publicUrl: (env.PUBLIC_URL || '').trim().replace(/\/$/, '')
 };

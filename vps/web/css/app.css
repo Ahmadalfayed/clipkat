@@ -621,3 +621,113 @@ html.in-call body { overflow: hidden; }
 .live-end .btn.ghost { color: #fff; border-color: rgba(255,255,255,.3); background: transparent; }
 .live-end h2 { color: #fff; }
 .call-ov.has-remote-video .call-info { margin-top: 0; } .call-local { top: calc(76px + env(safe-area-inset-top)); }
+
+/* ===== العملات وهدايا البث (© 2026 وطن النهار) ===== */
+.ck-coin { display: inline-block; vertical-align: -0.2em; flex: none; }
+.live-sub { position: absolute; z-index: 3; top: calc(58px + env(safe-area-inset-top)); inset-inline: 10px; display: flex; gap: 6px; align-items: center; pointer-events: none; }
+.live-sub > * { pointer-events: auto; }
+.live-top-gifters { display: inline-flex; align-items: center; gap: 4px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,214,102,.45); color: #fff; border-radius: 16px; padding: 2px 8px 2px 4px; cursor: pointer; }
+[dir=rtl] .live-top-gifters { padding: 2px 4px 2px 8px; }
+.live-top-gifters .tg-cup { font-size: 15px; } .tg-avs { display: inline-flex; } .tg-avs .av { width: 22px; height: 22px; border: 1.5px solid #ffd666; margin-inline-start: -6px; } .tg-avs .av:first-child { margin-inline-start: 0; }
+.live-gems { display: inline-flex; align-items: center; gap: 4px; background: rgba(0,0,0,.4); border-radius: 14px; padding: 3px 9px; font-size: 13px; font-weight: 800; }
+.live-gift-btn { width: 48px; height: 48px; border-radius: 50%; border: 0; flex: none; display: grid; place-items: center; cursor: pointer; color: #3a2200; background: linear-gradient(145deg, #ffe08a, #f5a524); box-shadow: 0 4px 14px rgba(245,165,36,.45); transition: transform .1s; animation: giftNudge 4s ease-in-out 2s infinite; }
+.live-gift-btn:active { transform: scale(.88); }
+@keyframes giftNudge { 0%, 88%, 100% { transform: rotate(0); } 91% { transform: rotate(-12deg); } 94% { transform: rotate(10deg); } 97% { transform: rotate(-6deg); } }
+
+/* شريط الهدايا الجانبي */
+.gift-lane { position: absolute; z-index: 4; inset-inline-start: 10px; top: 30%; display: flex; flex-direction: column; gap: 8px; pointer-events: none; max-width: 78%; }
+.gift-toast { display: flex; align-items: center; gap: 8px; padding: 4px 6px; padding-inline-end: 14px; border-radius: 26px; color: #fff; background: linear-gradient(90deg, rgba(255,45,85,.85), rgba(245,165,36,.75)); box-shadow: 0 6px 18px rgba(0,0,0,.3); animation: gtIn .35s var(--ease) both; position: relative; }
+[dir=rtl] .gift-toast { background: linear-gradient(270deg, rgba(255,45,85,.85), rgba(245,165,36,.75)); }
+.gift-toast.tier2 { background: linear-gradient(90deg, rgba(124,58,237,.9), rgba(18,194,160,.8)); }
+.gift-toast.tier3 { background: linear-gradient(90deg, #b8860b, #ffd666 50%, #b8860b); color: #2a1a00; background-size: 200% 100%; animation: gtIn .35s var(--ease) both, goldShine 1.6s linear infinite; }
+.gift-toast .av { width: 32px; height: 32px; border: 2px solid rgba(255,255,255,.8); }
+.gt-txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; } .gt-txt b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; } .gt-txt small { font-size: 11.5px; opacity: .95; white-space: nowrap; }
+.gt-emoji { font-size: 34px; line-height: 1; margin-top: -10px; margin-bottom: -6px; filter: drop-shadow(0 3px 4px rgba(0,0,0,.35)); animation: gtEmoji .6s var(--ease) both; }
+.gt-qty { font-size: 22px; font-weight: 1000; font-style: italic; color: #ffe08a; text-shadow: 0 2px 0 #b35d00, 0 0 10px rgba(0,0,0,.4); animation: gtQty .5s .15s var(--ease) both; }
+.gift-toast.tier3 .gt-qty { color: #fff; }
+.gift-toast.out { opacity: 0; transform: translateX(-30px); transition: .35s; } [dir=rtl] .gift-toast.out { transform: translateX(30px); }
+@keyframes gtIn { from { opacity: 0; transform: translateX(-60px) scale(.9); } to { opacity: 1; transform: none; } }
+[dir=rtl] .gift-toast { animation-name: gtInR; } [dir=rtl] .gift-toast.tier3 { animation-name: gtInR, goldShine; }
+@keyframes gtInR { from { opacity: 0; transform: translateX(60px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes gtEmoji { 0% { transform: scale(0) rotate(-30deg); } 70% { transform: scale(1.3) rotate(8deg); } 100% { transform: scale(1); } }
+@keyframes gtQty { 0% { transform: scale(2.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes goldShine { to { background-position: -200% 0; } }
+
+/* هدايا صغيرة تطفو للأعلى */
+.gift-pop { position: absolute; z-index: 4; bottom: calc(90px + env(safe-area-inset-bottom)); inset-inline-end: 70px; font-size: 34px; pointer-events: none; animation: giftUp 2.3s ease-out both; filter: drop-shadow(0 3px 5px rgba(0,0,0,.4)); }
+@keyframes giftUp { 0% { transform: translate(0, 0) scale(.3); opacity: 0; } 15% { opacity: 1; transform: translate(calc(var(--dx) * .2), -40px) scale(1.15); } 100% { transform: translate(var(--dx), -55dvh) scale(.8); opacity: 0; } }
+
+/* هدايا متوسطة وكبيرة: حركة في وسط الشاشة */
+.gift-fx { position: absolute; z-index: 5; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.gfx-glow { position: absolute; width: 70vmin; height: 70vmin; max-width: 420px; max-height: 420px; border-radius: 50%; background: radial-gradient(circle, rgba(255,214,102,.55), rgba(255,45,85,.25) 45%, transparent 70%); animation: gfxGlow 2.1s ease-out both; }
+.gift-fx.tier3 .gfx-glow { background: radial-gradient(circle, rgba(255,240,170,.8), rgba(245,165,36,.45) 35%, rgba(124,58,237,.25) 60%, transparent 72%); animation-duration: 3.2s; }
+.gfx-emoji { position: relative; font-size: 120px; line-height: 1; filter: drop-shadow(0 10px 18px rgba(0,0,0,.45)); animation: gfxPop 2.1s var(--ease) both; }
+.gift-fx.tier3 .gfx-emoji { font-size: 150px; animation: gfxFly 3.2s cubic-bezier(.3,.7,.3,1) both; }
+.gfx-sparks { position: absolute; width: 0; height: 0; }
+.gfx-sparks i { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: hsl(var(--h) 100% 62%); box-shadow: 0 0 10px hsl(var(--h) 100% 62%); animation: spark 1.4s .25s ease-out both; }
+.gift-fx.tier3 .gfx-sparks i { animation-duration: 1.8s; animation-iteration-count: 2; }
+.gfx-cap { position: absolute; top: calc(50% + 100px); font-weight: 900; font-size: 17px; background: rgba(0,0,0,.5); padding: 6px 14px; border-radius: 20px; animation: gfxCap 2.1s ease-out both; white-space: nowrap; max-width: 90%; overflow: hidden; text-overflow: ellipsis; }
+.gift-fx.tier3 .gfx-cap { animation-duration: 3.2s; background: linear-gradient(90deg, #b8860b, #ffd666, #b8860b); color: #2a1a00; }
+@keyframes gfxGlow { 0% { transform: scale(.2); opacity: 0; } 25% { opacity: 1; transform: scale(1); } 80% { opacity: .8; } 100% { opacity: 0; transform: scale(1.2); } }
+@keyframes gfxPop { 0% { transform: scale(0) rotate(-25deg); opacity: 0; } 20% { transform: scale(1.25) rotate(10deg); opacity: 1; } 32% { transform: scale(1) rotate(0); } 80% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(.6) translateY(-80px); opacity: 0; } }
+@keyframes gfxFly { 0% { transform: translate(-70vw, 30vh) rotate(-20deg) scale(.6); opacity: 0; } 25% { transform: translate(0, 0) rotate(0) scale(1.15); opacity: 1; } 35% { transform: scale(1); } 75% { transform: translate(0, -10px) scale(1.08); opacity: 1; } 100% { transform: translate(70vw, -40vh) rotate(15deg) scale(.7); opacity: 0; } }
+[dir=rtl] .gift-fx.tier3 .gfx-emoji { animation-name: gfxFlyR; }
+@keyframes gfxFlyR { 0% { transform: translate(70vw, 30vh) rotate(20deg) scale(.6); opacity: 0; } 25% { transform: translate(0, 0) rotate(0) scale(1.15); opacity: 1; } 35% { transform: scale(1); } 75% { transform: translate(0, -10px) scale(1.08); opacity: 1; } 100% { transform: translate(-70vw, -40vh) rotate(-15deg) scale(.7); opacity: 0; } }
+@keyframes spark { 0% { transform: rotate(var(--a)) translateX(0) scale(.4); opacity: 0; } 20% { opacity: 1; } 100% { transform: rotate(var(--a)) translateX(var(--d)) scale(1); opacity: 0; } }
+@keyframes gfxCap { 0%, 15% { opacity: 0; transform: translateY(10px); } 30%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .gift-fx .gfx-emoji, .gift-pop, .gfx-sparks i, .live-gift-btn { animation-duration: .01s !important; animation-iteration-count: 1 !important; } }
+
+/* درج الهدايا */
+.gift-tray { position: absolute; z-index: 5; inset-inline: 0; bottom: 0; background: rgba(14,18,34,.94); backdrop-filter: blur(14px); color: #fff; border-radius: 20px 20px 0 0; padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); transform: translateY(100%); transition: transform .22s var(--ease); max-height: 78dvh; overflow-y: auto; box-shadow: 0 -10px 30px rgba(0,0,0,.4); }
+.gift-tray.open { transform: none; }
+.gt-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; } .gt-head > b { flex: 1; font-size: 16px; }
+.gt-bal { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; background: rgba(255,255,255,.08); padding: 4px 10px; border-radius: 14px; }
+.gt-recharge { background: linear-gradient(145deg, #ffe08a, #f5a524); color: #3a2200; border: 0; font-weight: 800; }
+.gt-x { color: #fff; font-size: 16px; }
+.gt-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.gt-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px 6px; border-radius: 14px; border: 1.5px solid transparent; background: rgba(255,255,255,.05); color: #fff; cursor: pointer; transition: transform .12s, border-color .12s, background .12s; min-width: 0; }
+.gt-item:active { transform: scale(.94); }
+.gt-item.on { border-color: #ffd666; background: rgba(255,214,102,.14); }
+.gi-emoji { font-size: 34px; line-height: 1.1; transition: transform .2s var(--ease); } .gt-item.on .gi-emoji { transform: scale(1.18); animation: giBob 1s ease-in-out infinite; }
+@keyframes giBob { 50% { transform: scale(1.18) translateY(-3px); } }
+.gt-item.tier3 .gi-emoji { filter: drop-shadow(0 0 6px rgba(255,214,102,.7)); }
+.gi-name { font-size: 11.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.gi-cost { font-size: 11.5px; display: inline-flex; align-items: center; gap: 3px; color: #ffd666; }
+.gt-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.gt-qty { display: inline-flex; background: rgba(255,255,255,.08); border-radius: 14px; padding: 3px; gap: 2px; }
+.gt-qty button { border: 0; background: none; color: #fff; padding: 6px 10px; border-radius: 11px; font-weight: 800; cursor: pointer; }
+.gt-qty button.on { background: #fff; color: #10162b; }
+.gt-send { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(90deg, #ff2d55, #f5a524); color: #fff; border: 0; font-weight: 900; }
+.gt-send.short { opacity: .65; }
+.gt-recharge-box { margin-top: 12px; border-top: 1px solid rgba(255,255,255,.1); padding-top: 10px; }
+.gt-recharge-box .pkg { background: rgba(255,255,255,.06); color: #fff; border-color: rgba(255,255,255,.12); }
+
+/* باقات وشاشات المحفظة */
+.coin-demo { border-radius: 12px; padding: 9px 12px; font-size: 12.5px; line-height: 1.5; margin: 8px 0; background: repeating-linear-gradient(-45deg, rgba(245,165,36,.2) 0 10px, rgba(245,165,36,.12) 10px 20px); border: 1px dashed rgba(245,165,36,.7); }
+.coin-demo b { color: #f5a524; margin-inline-end: 4px; }
+.pkg-list { display: flex; flex-direction: column; gap: 8px; }
+.pkg { display: flex; align-items: center; gap: 10px; width: 100%; text-align: start; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; transition: transform .1s, border-color .15s; }
+.pkg:hover { border-color: #f5a524; } .pkg:active { transform: scale(.98); } .pkg:disabled { opacity: .6; }
+.pkg-coins { display: inline-flex; align-items: center; gap: 6px; font-size: 18px; min-width: 92px; }
+.pkg-name { flex: 1; font-size: 13.5px; font-weight: 700; } .pkg-name em { font-style: normal; font-size: 11px; color: var(--ok); background: color-mix(in srgb, var(--ok) 15%, transparent); padding: 1px 6px; border-radius: 8px; white-space: nowrap; }
+.pkg-price { font-weight: 900; background: linear-gradient(145deg, #ffe08a, #f5a524); color: #3a2200; padding: 6px 10px; border-radius: 10px; white-space: nowrap; font-size: 13.5px; }
+.wallet-hero { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 22px 16px; border-radius: 20px; margin: 4px 0 12px; color: #fff; text-align: center; }
+.wallet-hero.coins { background: radial-gradient(120% 120% at 20% 0%, #ffcf5a 0%, #f5a524 40%, #b35d00 100%); color: #2a1a00; }
+.wallet-hero.gems { background: radial-gradient(120% 120% at 20% 0%, #7dd3fc 0%, #6366f1 50%, #4c1d95 100%); }
+.wh-label { font-size: 13px; font-weight: 700; opacity: .85; } .wh-val { display: inline-flex; align-items: center; gap: 8px; font-size: 36px; font-weight: 1000; line-height: 1.1; } .wallet-hero small { font-size: 12.5px; opacity: .9; }
+.led-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; }
+.led-list li { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+.led-list li:last-child { border-bottom: 0; }
+.led-list .grow { display: flex; flex-direction: column; align-items: flex-start; } .led-list .grow b { font-size: 14px; } .led-list small { font-size: 12px; }
+.led-d { font-variant-numeric: tabular-nums; white-space: nowrap; } .led-d.plus { color: var(--ok); } .led-d.minus { color: var(--danger); }
+.po-st { font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 10px; white-space: nowrap; background: var(--surface2); }
+.po-st.pending { color: #b97700; background: color-mix(in srgb, var(--accent) 18%, transparent); } .po-st.approved { color: var(--ok); background: color-mix(in srgb, var(--ok) 15%, transparent); } .po-st.rejected { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.po-acts { display: flex; flex-direction: column; gap: 6px; } .po-row { align-items: flex-start !important; }
+.top-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.top-list li { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--line); } .top-list li:last-child { border-bottom: 0; }
+.top-list .grow { display: flex; flex-direction: column; }
+.tl-rank { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 900; background: var(--surface2); flex: none; }
+.tl-rank.r1 { background: linear-gradient(145deg, #ffe08a, #f5a524); color: #3a2200; } .tl-rank.r2 { background: linear-gradient(145deg, #f1f5f9, #94a3b8); color: #1e293b; } .tl-rank.r3 { background: linear-gradient(145deg, #fcd5b5, #c2703d); color: #3b1d0a; }
+.tl-coins { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; white-space: nowrap; }
+.seg-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.gift-admin .kpi small { display: block; font-size: 11px; color: var(--muted); white-space: normal; }

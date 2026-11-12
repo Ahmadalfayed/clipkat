@@ -36,7 +36,7 @@ async function token(identity, room, grant, { name = '', ttl = '4h', metadata } 
   return at.toJwt();
 }
 const enc = new TextEncoder();
-async function sendLive(liveId, msg) {
+export async function sendLive(liveId, msg) {
   try { await svc().sendData(liveRoom(liveId), enc.encode(JSON.stringify(msg)), DataPacket_Kind.RELIABLE, { topic: 'ck' }); }
   catch (e) { if (!/not found|404/i.test(e.message)) console.warn('[live] sendData failed:', e.message); }
 }
@@ -53,7 +53,7 @@ export const online = (userId) => !!subs.get(userId)?.size;
 
 // ---------------- خرائط ----------------
 const mapLive = (l, host, viewers) => ({ id: l.id, userId: l.user_id, title: l.title || '', status: l.status, startedAt: ms(l.started_at), endedAt: ms(l.ended_at), endReason: l.end_reason || null,
-  viewers: viewers ?? viewerCounts.get(l.id) ?? 0, peakViewers: l.peak_viewers || 0, hearts: l.hearts_count || 0, savedVideoId: l.saved_video_id || null, host: host || null });
+  viewers: viewers ?? viewerCounts.get(l.id) ?? 0, peakViewers: l.peak_viewers || 0, hearts: l.hearts_count || 0, giftCoins: Number(l.gift_coins || 0), giftDiamonds: Number(l.gift_diamonds || 0), savedVideoId: l.saved_video_id || null, host: host || null });
 const mapLiveComment = (c, u) => ({ id: c.id, liveId: c.live_id, userId: c.user_id, text: c.text, createdAt: ms(c.created_at), user: u ? { id: u.id, name: u.name, username: u.username, avatar: u.avatar } : null });
 const mapCall = (c) => ({ id: c.id, callerId: c.caller_id, calleeId: c.callee_id, kind: c.kind, status: c.status, createdAt: ms(c.created_at), answeredAt: ms(c.answered_at), endedAt: ms(c.ended_at) });
 const profileOf = async (id) => mapProfile((await q(`select ${PROFILE_COLS} from profiles p where p.id = $1`, [id])).rows[0]);
@@ -194,6 +194,14 @@ export async function callPolicy(a, b) {
   return { ok: true };
 }
 
+// بث يحق للمستخدم رؤيته (خصوصية + حظر) — يُستخدم أيضاً في الهدايا
+export async function visibleLive(req, id) {
+  const l = need((await q('select * from lives where id = $1', [uid(id)])).rows[0]);
+  const viewer = req.user?.id || null;
+  if (viewer !== l.user_id && !req.user?.is_admin && (!(await canSeeUserContent(req.user, l.user_id)) || (viewer && await isBlockedBetween(viewer, l.user_id)))) throw new HttpError(404, 'notfound');
+  return l;
+}
+
 export function buildRtcRouter() {
   const r = express.Router();
   r.get('/rtc/config', (_req, res) => res.json({ enabled: rtcEnabled(), url: rtcEnabled() ? config.livekitUrl : '', maxSec: config.maxVideoSec, ringSec: config.callRingSec, turnTlsPort: config.turnTlsPort }));
@@ -213,12 +221,6 @@ export function buildRtcRouter() {
   }));
 
   // ---------------- البث المباشر ----------------
-  const visibleLive = async (req, id) => {
-    const l = need((await q('select * from lives where id = $1', [uid(id)])).rows[0]);
-    const viewer = req.user?.id || null;
-    if (viewer !== l.user_id && !req.user?.is_admin && (!(await canSeeUserContent(req.user, l.user_id)) || (viewer && await isBlockedBetween(viewer, l.user_id)))) throw new HttpError(404, 'notfound');
-    return l;
-  };
   r.get('/live', h(async (req, res) => {
     const me = req.user?.id || null;
     const rows = (await q(`select l.* from lives l join profiles p on p.id = l.user_id

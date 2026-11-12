@@ -262,6 +262,60 @@ Object.assign(en, {
   slowDown: 'Slow down a little and try again', n_call_missed_audio: 'Missed voice call', n_call_missed_video: 'Missed video call', callBack: 'Call back', micDenied: 'Microphone was blocked'
 });
 
+// ===== العملات وهدايا البث (© 2026 وطن النهار) =====
+Object.assign(ar, {
+  demoMode: 'وضع تجريبي', demoCoinsNote: 'بوابة الدفع غير مربوطة بعد — الشحن هنا مجاني للتجربة ولا يُخصم أي مبلغ حقيقي.',
+  demoPayoutNote: 'الأرباح الحالية من عملات تجريبية — طلبات السحب تُراجع فقط ولا تُحوَّل أموال حقيقية حتى تفعيل الدفع.',
+  pkg_small: 'باقة صغيرة', pkg_medium: 'باقة متوسطة', pkg_large: 'باقة كبيرة', bonus: 'هدية',
+  demoCoinsAdded: 'أُضيفت {n} عملة (وضع تجريبي)', coinsAdded: 'أُضيفت {n} عملة', coinsAddedShort: 'تم شحن العملات ✅', payFailed: 'لم تكتمل عملية الدفع',
+  demoCap: 'وصلت للحد اليومي للشحن التجريبي', payNotReady: 'الدفع غير متاح حالياً', buyFail: 'تعذّر الشحن — حاول مجدداً',
+  sentGift: 'أرسل {gift}', topGifters: 'أكبر الداعمين', noGiftersYet: 'لا هدايا بعد — كن أول داعم!', sendGift: 'إرسال هدية', recharge: 'شحن', quantity: 'العدد',
+  notEnoughCoins: 'رصيدك من العملات لا يكفي — اشحن أولاً', giftFail: 'تعذّر إرسال الهدية', diamonds: 'الألماس',
+  myCoins: 'عملاتي', myEarnings: 'أرباحي', walletSec: 'المحفظة والأرباح', coinBalance: 'رصيد العملات', coinsUse: 'استخدمها لإرسال هدايا في البث المباشر',
+  rechargeCoins: 'شحن العملات', coinsTermsShort: 'العملات والهدايا عناصر افتراضية غير قابلة للاسترداد.', coinHistory: 'سجل العملات', noCoinHistory: 'لا حركات بعد',
+  earningsSub: 'ألماس من هدايا البث وطلبات السحب',
+  led_purchase: 'شحن عملات', led_grant: 'منحة من الإدارة', led_gift_sent: 'هدية مرسلة', led_gift_received: 'هدية مستلمة', led_payout_hold: 'طلب سحب', led_payout_refund: 'إرجاع سحب مرفوض',
+  diamondBalance: 'رصيد الألماس', approxValue: 'القيمة التقريبية', lifetimeDiamonds: 'كل ما كسبته', giftsReceived: 'هدايا مستلمة',
+  earnExplain: 'تحصل على {share}٪ من قيمة كل هدية على شكل ألماس، وكل ألماسة ≈ {value} د.ك عند السحب.',
+  requestPayout: 'طلب سحب الأرباح', payoutPendingNote: 'لديك طلب سحب قيد المراجعة: 💎 {n} ({v})', payoutMinNote: 'أقل مبلغ للسحب 💎 {n} (≈ {v})',
+  payoutAmount: 'عدد الألماس', accountName: 'اسم صاحب الحساب', ibanLabel: 'رقم الآيبان (IBAN)', payoutNote: 'ملاحظة (اختياري)',
+  payoutManual: 'يُراجع كل طلب يدوياً من الإدارة ثم يُحوَّل المبلغ لحسابك البنكي. يُحجز الألماس حتى البت في الطلب، ويُعاد لرصيدك إن رُفض.',
+  sendPayoutReq: 'إرسال طلب السحب', payoutHistory: 'طلبات السحب', po_pending: 'قيد المراجعة', po_approved: 'موافق عليه', po_rejected: 'مرفوض',
+  giftHistory: 'الهدايا المستلمة', noGiftsYet: 'لا هدايا بعد', noGiftsYetSub: 'ابدأ بثاً مباشراً ليرسل لك متابعوك الهدايا.',
+  payoutSent: 'أُرسل طلب السحب ✅', payoutMinErr: 'المبلغ أقل من الحد الأدنى للسحب', notEnoughDiamonds: 'رصيد الألماس لا يكفي', payoutPendingErr: 'لديك طلب سحب قيد المراجعة', payoutFail: 'تعذّر تنفيذ الطلب',
+  giftRevenue: 'إيرادات هدايا البث', adminDemoNote: 'الدفع غير مربوط: كل العملات تجريبية — لا تحوّل أي مبلغ لطلبات السحب الموسومة «تجريبي».',
+  giftCoinsSpent: 'عملات أُنفقت على الهدايا', platformShare: 'نصيب المنصة', hostsDiamonds: 'ألماس صنّاع المحتوى', pendingPayouts: 'سحوبات معلّقة', coinsSold: 'عملات مباعة', grantedCoins: 'عملات ممنوحة',
+  payoutRequests: 'طلبات السحب', approve: 'موافقة', reject: 'رفض', noPayouts: 'لا طلبات', grantCoins: 'منح عملات', usernameLabel: 'اسم المستخدم', coinsLabel: 'عدد العملات', topHosts: 'أعلى صنّاع المحتوى',
+  approveNoteQ: 'ملاحظة للمستخدم (اختياري) — حوّل المبلغ يدوياً ثم وافق', rejectNoteQ: 'سبب الرفض (يظهر للمستخدم)', payoutApproved: 'تمت الموافقة', payoutRejected: 'رُفض الطلب وأُعيد الألماس',
+  granted: 'مُنح {n} عملة لـ @{u} — الرصيد {b}', noSuchUser: 'المستخدم غير موجود', grantFail: 'تعذّر المنح'
+});
+Object.assign(en, {
+  demoMode: 'Demo mode', demoCoinsNote: 'No payment gateway is connected yet — recharging here is free for testing and no real money is charged.',
+  demoPayoutNote: 'Current earnings come from demo coins — payout requests are reviewed only; no real money is sent until payments go live.',
+  pkg_small: 'Small pack', pkg_medium: 'Medium pack', pkg_large: 'Large pack', bonus: 'bonus',
+  demoCoinsAdded: '{n} coins added (demo)', coinsAdded: '{n} coins added', coinsAddedShort: 'Coins added ✅', payFailed: 'Payment was not completed',
+  demoCap: 'Daily demo recharge limit reached', payNotReady: 'Payments are not available right now', buyFail: 'Recharge failed — try again',
+  sentGift: 'sent {gift}', topGifters: 'Top gifters', noGiftersYet: 'No gifts yet — be the first!', sendGift: 'Send a gift', recharge: 'Recharge', quantity: 'Quantity',
+  notEnoughCoins: 'Not enough coins — recharge first', giftFail: 'Could not send the gift', diamonds: 'Diamonds',
+  myCoins: 'My coins', myEarnings: 'My earnings', walletSec: 'Wallet & earnings', coinBalance: 'Coin balance', coinsUse: 'Use them to send gifts in live streams',
+  rechargeCoins: 'Recharge coins', coinsTermsShort: 'Coins and gifts are non-refundable virtual items.', coinHistory: 'Coin history', noCoinHistory: 'No activity yet',
+  earningsSub: 'Diamonds from live gifts and payouts',
+  led_purchase: 'Recharge', led_grant: 'Admin grant', led_gift_sent: 'Gift sent', led_gift_received: 'Gift received', led_payout_hold: 'Payout request', led_payout_refund: 'Rejected payout returned',
+  diamondBalance: 'Diamond balance', approxValue: 'Approx. value', lifetimeDiamonds: 'Lifetime earned', giftsReceived: 'Gifts received',
+  earnExplain: 'You receive {share}% of each gift as diamonds; each diamond ≈ KWD {value} at payout.',
+  requestPayout: 'Request a payout', payoutPendingNote: 'You have a payout under review: 💎 {n} ({v})', payoutMinNote: 'Minimum payout is 💎 {n} (≈ {v})',
+  payoutAmount: 'Diamonds', accountName: 'Account holder name', ibanLabel: 'IBAN', payoutNote: 'Note (optional)',
+  payoutManual: 'Every request is reviewed manually, then transferred to your bank account. Diamonds are held until a decision and returned if rejected.',
+  sendPayoutReq: 'Send payout request', payoutHistory: 'Payout requests', po_pending: 'Under review', po_approved: 'Approved', po_rejected: 'Rejected',
+  giftHistory: 'Gifts received', noGiftsYet: 'No gifts yet', noGiftsYetSub: 'Go live so your followers can send you gifts.',
+  payoutSent: 'Payout request sent ✅', payoutMinErr: 'Amount is below the minimum payout', notEnoughDiamonds: 'Not enough diamonds', payoutPendingErr: 'You already have a payout under review', payoutFail: 'Request failed',
+  giftRevenue: 'Live gift revenue', adminDemoNote: 'Payments not connected: all coins are demo — do not transfer money for payouts marked “demo”.',
+  giftCoinsSpent: 'Coins spent on gifts', platformShare: 'Platform share', hostsDiamonds: 'Creator diamonds', pendingPayouts: 'Pending payouts', coinsSold: 'Coins sold', grantedCoins: 'Coins granted',
+  payoutRequests: 'Payout requests', approve: 'Approve', reject: 'Reject', noPayouts: 'No requests', grantCoins: 'Grant coins', usernameLabel: 'Username', coinsLabel: 'Coins', topHosts: 'Top creators',
+  approveNoteQ: 'Note to the user (optional) — transfer the money manually, then approve', rejectNoteQ: 'Reason for rejection (shown to the user)', payoutApproved: 'Approved', payoutRejected: 'Rejected and diamonds returned',
+  granted: 'Granted {n} coins to @{u} — balance {b}', noSuchUser: 'User not found', grantFail: 'Grant failed'
+});
+
 export let lang = localStorage.getItem('ck:lang') || 'ar';
 export const brandName = () => BRAND[lang];
 

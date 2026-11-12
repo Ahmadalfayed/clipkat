@@ -6,6 +6,8 @@ export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 // أيقونات SVG مرسومة يدوياً (بدون مكتبات أو خطوط إيموجي)
 const P = {
+  gift: '<path d="M3 8h18v4H3z"/><path d="M12 8v13M19 12v9H5v-9"/><path d="M12 8S11 3 7.5 3a2.5 2.5 0 0 0 0 5M12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/>',
+  wallet: '<path d="M4 7h15a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 7l11-3v3M16 13.5h2"/>',
   home: '<path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
   store: '<path d="M4 9h16l-1.2-4.2A1 1 0 0 0 17.8 4H6.2a1 1 0 0 0-1 .8z"/><path d="M5 9v11h14V9"/><path d="M9.5 20v-5h5v5"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',

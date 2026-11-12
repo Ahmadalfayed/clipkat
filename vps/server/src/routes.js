@@ -18,6 +18,7 @@ import { imageUpload, videoUpload, audioUpload, sniffImage, sniffVideo, place, r
 import { sniffAudio, probe, extractAudio } from './media.js';
 import { activateRental, cancelRental, slots, notify } from './rentals.js';
 import { buildRtcRouter } from './rtc.js';
+import { buildGiftsRouter } from './gifts.js';
 import { verifyGoogleIdToken, baseUsernameFromGoogle, uniqueUsername, unusablePasswordHash } from './google.js';
 
 export const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -31,6 +32,7 @@ export function buildRouter() {
   r.use(mkLimit(60000, config.rateApiMax));
   r.use(loadUser);
   r.use(buildRtcRouter());          // البث المباشر والمكالمات
+  r.use(buildGiftsRouter());        // العملات وهدايا البث (لا علاقة لها بمبيعات المتاجر)
 
   r.get('/health', h(async (_q, res) => { await q('select 1'); res.json({ ok: true }); }));
   r.get('/config', (_req, res) => res.json({ maxVideoMb: config.maxVideoMb, maxImageMb: config.maxImageMb, maxSoundMb: config.maxSoundMb, maxSoundSec: config.maxSoundSec, maxVideoSec: config.maxVideoSec, storePolicyVersion: STORE_POLICY_VERSION, googleClientId: config.googleClientId || '' }));
