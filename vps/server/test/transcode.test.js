@@ -172,3 +172,32 @@ test('pending jobs are picked up without a new upload (resume after restart)', a
   assert.equal(done.mediaStatus, 'ready'); assert.match(done.src, /\.mp4$/);
   assert.ok(!fs.existsSync(onDisk(webmUrl)));
 });
+
+// تسجيل كاميرا الاستوديو حتى 3 دقائق: WebM «حي» بلا مدة في الترويسة (مثل MediaRecorder)
+function makeLiveWebm(name, sec) {
+  const out = path.join(fx, name); fs.mkdirSync(fx, { recursive: true });
+  ff(['-f', 'lavfi', '-i', 'testsrc2=size=160x284:rate=15', '-f', 'lavfi', '-i', 'sine=frequency=400', '-t', String(sec), '-c:v', 'libvpx', '-deadline', 'realtime', '-cpu-used', '8', '-b:v', '150k', '-c:a', 'libopus', '-b:a', '32k', '-live', '1', '-shortest', out]);
+  return out;
+}
+// نولّد الملفات الطويلة قبل أي طلب HTTP: execFileSync يجمّد حلقة الأحداث فيُعاد استخدام اتصال keep-alive مغلق (EPIPE)
+let REC180, REC200;
+before(() => { REC180 = makeLiveWebm('rec-180.webm', 180); REC200 = makeLiveWebm('rec-200.webm', 200); });
+test('3-minute camera recording (WebM without duration) publishes and converts to a full 180 s MP4', async () => {
+  const u = await user('rec180' + crypto.randomBytes(2).toString('hex'));
+  const r = await upload(u, REC180, { saveSound: '1' });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.mediaStatus, 'processing');
+  const done = await waitStatus(u, r.body.id, ['ready', 'failed'], 120000);
+  assert.equal(done.mediaStatus, 'ready'); assert.match(done.src, /\.mp4$/);
+  const d = Number(probeJson(onDisk(done.src)).format.duration);
+  assert.ok(d > 179 && d < 180.8, 'duration ' + d);
+});
+test('recording longer than the limit is capped at 180 s during conversion', async () => {
+  const u = await user('rec200' + crypto.randomBytes(2).toString('hex'));
+  const r = await upload(u, REC200);
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const done = await waitStatus(u, r.body.id, ['ready', 'failed'], 120000);
+  assert.equal(done.mediaStatus, 'ready');
+  const d = Number(probeJson(onDisk(done.src)).format.duration);
+  assert.ok(d <= 180.8 && d > 179, 'capped duration ' + d);
+});

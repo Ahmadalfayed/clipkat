@@ -78,7 +78,8 @@ const TONEMAP = 'zscale=t=linear:npl=203,format=gbrpf32le,zscale=p=bt709,tonemap
 export function ffmpegArgs(mode, input, output, info, { tonemap = true } = {}) {
   const base = ['-y', '-v', 'error', '-nostdin', '-i', input, '-map', '0:v:0', '-map', '0:a:0?', '-map_metadata', '-1', '-sn', '-dn'];
   const audio = info?.audio && info.audio.codec === 'aac' ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-ar', '44100'];
-  const tail = ['-movflags', '+faststart', '-f', 'mp4', output];
+  // حد المدة يُفرض هنا أيضاً: تسجيلات WebM من المتصفح لا تحمل مدتها في الترويسة
+  const tail = ['-t', String(config.maxVideoSec + 0.5), '-movflags', '+faststart', '-f', 'mp4', output];
   if (mode === 'remux') return [...base, '-c:v', 'copy', ...audio, ...tail];
   const hdr = isHdr(info?.video);
   // ffmpeg يطبّق التدوير (autorotate) قبل المرشحات ويصفّر بيانات التدوير في الناتج

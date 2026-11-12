@@ -5,7 +5,8 @@ import { icon, esc, $, $$, toast, productImg } from '../ui.js';
 import { pageHead } from './common.js';
 import { FILTERS, SPEEDS, recorderSupported, pickRecorderMime, exportClip, exportDuet, exportStitch, captureFrame, blobToFile } from '../studio-export.js';
 
-const MAX_REC = 60;   // حد التصوير بالكاميرا داخل الاستوديو
+import { recLimitSec, recState, recExt, fmtClock, REC_TIMESLICE_MS, REC_VIDEO_BPS, REC_AUDIO_BPS } from '../rec-limits.js';
+const maxRec = () => recLimitSec(api.maxVideoSec);   // حد التصوير بالكاميرا = حد المقطع (3 دقائق)
 const maxClip = () => api.maxVideoSec || 180;   // القص الافتراضي: المقطع كاملاً حتى الحد
 export function uploadErrorText(err) {
   const m = String(err?.message || '');
@@ -51,7 +52,20 @@ export async function render(el, params, ctx) {
     if (st.url) { const u = st.url; setTimeout(() => URL.revokeObjectURL(u), 1500); st.url = null; }
   };
 
-  const useFile = async (file) => {
+  // تسجيلات WebM من MediaRecorder (كروم) تأتي بمدة Infinity — نحسبها بالقفز لنهاية الملف، وإلا نستخدم مدة التسجيل المعروفة
+  async function finiteDuration(v, hint = 0) {
+    if (Number.isFinite(v.duration) && v.duration > 0) return v.duration;
+    await new Promise((ok) => {
+      let fin = false; const done = () => { if (fin) return; fin = true; v.removeEventListener('durationchange', on); v.removeEventListener('timeupdate', on); ok(); };
+      const on = () => { if (Number.isFinite(v.duration) && v.duration > 0) done(); };
+      v.addEventListener('durationchange', on); v.addEventListener('timeupdate', on); setTimeout(done, 5000);
+      try { v.currentTime = 1e7; } catch { done(); }
+    });
+    try { v.currentTime = 0; } catch {}
+    return Number.isFinite(v.duration) && v.duration > 0 ? v.duration : hint;
+  }
+  const vDur = (v) => (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : st.dur || st.end);
+  const useFile = async (file, { durHint = 0 } = {}) => {
     cleanupMedia();
     st.file = file; st.url = URL.createObjectURL(file); st.exported = null;
     const v = document.createElement('video'); v.preload = 'auto'; v.src = st.url;
@@ -61,7 +75,7 @@ export async function render(el, params, ctx) {
       if (remixType) { toast(t('badVideo'), 'warn'); return; }
       toast(t('rawUploadNote'), 'warn'); st.step = 'publish'; await draw(); return;
     }
-    const dur = v.duration;
+    const dur = await finiteDuration(v, durHint); st.dur = dur;
     if (!Number.isFinite(dur) || dur < 0.2) { toast(t('badVideo'), 'warn'); return; }
     if (dur > (api.maxVideoSec || 180) + 0.5) { toast(t('videoTooLong', { n: api.maxVideoSec || 180 }), 'warn'); }
     st.start = 0; st.end = Math.min(dur, maxClip()); st.cover = Math.min(0.4, st.end / 2);
@@ -166,9 +180,8 @@ export async function render(el, params, ctx) {
       const duetCam = remixType === 'duet' && srcUrl;
       el.innerHTML = `<div class="page studio">${pageHead(t('recordCam'))}
         ${duetCam ? `<div class="duet-stage ${st.layout} src-${st.sourceSide}"><video class="duet-src" playsinline muted autoplay loop src="${esc(srcUrl)}"></video><video class="cam" playsinline muted autoplay></video></div>
-          <div class="chips" role="group">${layoutChips()}</div>` : `<div class="cam-wrap"><video class="cam" playsinline muted autoplay></video>
-          <div class="cam-hud"><span id="recTime">0:00</span></div></div>`}
-        <div class="cam-hud"><span id="recTime">0:00</span></div>
+          <div class="chips" role="group">${layoutChips()}</div>` : `<div class="cam-wrap"><video class="cam" playsinline muted autoplay></video></div>`}
+        <div class="rec-hud" id="recHud" role="timer" aria-live="off"><span id="recTime">${fmtClock(0)} / ${fmtClock(maxRec())}</span><div class="rec-bar"><i id="recBar"></i></div></div>
         <div class="studio-bar">
           <button class="btn" id="flip">${esc(t('flipCam'))}</button>
           <button class="btn primary rec-btn" id="rec">${esc(t('startRec'))}</button>
@@ -185,22 +198,27 @@ export async function render(el, params, ctx) {
         const mime = pickRecorderMime();
         if (!mime) { toast(t('noRecorderHint'), 'warn'); return; }
         const chunks = [];
-        try { st.rec = new MediaRecorder(st.stream, { mimeType: mime }); }
-        catch { toast(t('noRecorderHint'), 'warn'); return; }
+        try { st.rec = new MediaRecorder(st.stream, { mimeType: mime, videoBitsPerSecond: REC_VIDEO_BPS, audioBitsPerSecond: REC_AUDIO_BPS }); }
+        catch { try { st.rec = new MediaRecorder(st.stream, { mimeType: mime }); } catch { toast(t('noRecorderHint'), 'warn'); return; } }
         st.rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
         st.rec.onstop = async () => {
-          clearInterval(st.recTimer);
+          clearInterval(st.recTimer); st.recTimer = null;
           const blob = new Blob(chunks, { type: st.rec.mimeType || mime });
           st.stream?.getTracks().forEach((t) => t.stop()); st.stream = null;
           if (!blob.size) { toast(t('recEmpty'), 'warn'); st.step = 'source'; await draw(); return; }
-          await useFile(new File([blob], `rec-${Date.now()}.webm`, { type: blob.type }));
+          await useFile(new File([blob], `rec-${Date.now()}.${recExt(blob.type)}`, { type: blob.type }), { durHint: st.recSec });
         };
-        st.rec.start(200); st.recSec = 0; btn.textContent = t('stopRec'); btn.classList.add('recording');
-        st.recTimer = setInterval(() => {
-          st.recSec += 1; const m = Math.floor(st.recSec / 60), s = st.recSec % 60;
-          const tEl = $('#recTime', el); if (tEl) tEl.textContent = `${m}:${String(s).padStart(2, '0')}`;
-          if (st.recSec >= MAX_REC) st.rec.stop();
-        }, 1000);
+        const limit = maxRec(), startedAt = Date.now();
+        st.rec.start(REC_TIMESLICE_MS); st.recSec = 0; btn.textContent = t('stopRec'); btn.classList.add('recording');
+        const hud = $('#recHud', el); hud?.classList.add('on');
+        const tick = () => {
+          const r = recState(startedAt, Date.now(), limit); st.recSec = Math.floor(r.elapsed);
+          const tEl = $('#recTime', el); if (tEl) tEl.textContent = r.label;
+          const bar = $('#recBar', el); if (bar) bar.style.width = (r.progress * 100).toFixed(1) + '%';
+          hud?.classList.toggle('warn', r.warn);
+          if (r.done && st.rec?.state === 'recording') { clearInterval(st.recTimer); st.recTimer = null; toast(t('recMaxReached', { n: fmtClock(limit) }), 'ok'); st.rec.stop(); }
+        };
+        st.recTimer = setInterval(tick, 250);
       });
       return;
     }
@@ -242,14 +260,14 @@ export async function render(el, params, ctx) {
         $('#textLayer', el).innerHTML = st.texts.map((x, i) => `<span class="tx" style="top:${x.y * 100}%;color:${esc(x.color)};font-size:${x.size * 0.45}px">${esc(x.text)}<button type="button" data-rm="${i}" aria-label="${esc(t('delete'))}">×</button></span>`).join('');
       };
       const syncTrim = () => {
-        const max = v.duration || st.end;
+        const max = vDur(v);
         $('#t0', el).max = $('#t1', el).max = String(max);
         st.start = Math.min(Number($('#t0', el).value), st.end - 0.15);
         st.end = Math.max(Number($('#t1', el).value), st.start + 0.15);
         $('#t0', el).value = st.start; $('#t1', el).value = st.end;
         $('#trimLbl', el).textContent = `${durLabel(st.start)} — ${durLabel(st.end)}`;
       };
-      v.addEventListener('loadedmetadata', () => { if (!st.end || st.end > v.duration) st.end = Math.min(v.duration, maxClip()); syncTrim(); applyLook(); });
+      v.addEventListener('loadedmetadata', () => { if (!st.end || st.end > vDur(v)) st.end = Math.min(vDur(v), maxClip()); syncTrim(); applyLook(); });
       v.addEventListener('timeupdate', () => { if (v.currentTime >= st.end) { v.pause(); v.currentTime = st.start; } });
       applyLook();
       el.querySelectorAll('[data-sp]').forEach((b) => b.addEventListener('click', () => { st.speed = Number(b.dataset.sp); el.querySelectorAll('[data-sp]').forEach((x) => x.classList.toggle('on', x === b)); applyLook(); }));

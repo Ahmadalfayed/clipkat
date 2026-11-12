@@ -156,7 +156,7 @@ Object.assign(en, {
 // ===== المرحلة 2: الاستوديو ومكتبة الأصوات (© 2026 وطن النهار) =====
 Object.assign(ar, {
   studio: 'الاستوديو', studioHint: 'صوّر من الكاميرا أو اختر ملفاً، ثم قصّ وأضف نصاً أو فلترًا قبل النشر.',
-  recordCam: 'تصوير', recordCamSub: 'الكاميرا والميكروفون من المتصفح', pickHintStudio: 'MP4 أو WebM أو MOV — حتى 3 دقائق',
+  recordCam: 'تصوير', recordCamSub: 'الكاميرا والميكروفون من المتصفح — حتى 3 دقائق', recMaxReached: 'وصلت للحد الأقصى ({n}) — توقف التصوير تلقائياً', pickHintStudio: 'MP4 أو WebM أو MOV — حتى 3 دقائق',
   startRec: 'بدء التصوير', stopRec: 'إيقاف', flipCam: 'قلب الكاميرا', recEmpty: 'لم يُحفظ أي تصوير',
   camDenied: 'لم يُسمح بالوصول للكاميرا أو الميكروفون. اسمح بالإذن من إعدادات المتصفح ثم حاول مرة أخرى.',
   camMissing: 'لا توجد كاميرا على هذا الجهاز.', camBusy: 'الكاميرا مشغولة في تطبيق آخر.', camInsecure: 'التصوير يحتاج صفحة آمنة (https أو localhost).',
@@ -183,7 +183,7 @@ Object.assign(ar, {
 });
 Object.assign(en, {
   studio: 'Studio', studioHint: 'Record from the camera or pick a file, then trim and add text or a filter before publishing.',
-  recordCam: 'Record', recordCamSub: 'Camera and microphone in the browser', pickHintStudio: 'MP4, WebM or MOV — up to 3 minutes',
+  recordCam: 'Record', recordCamSub: 'Camera and microphone in the browser — up to 3 minutes', recMaxReached: 'Reached the limit ({n}) — recording stopped automatically', pickHintStudio: 'MP4, WebM or MOV — up to 3 minutes',
   startRec: 'Start recording', stopRec: 'Stop', flipCam: 'Flip camera', recEmpty: 'Nothing was recorded',
   camDenied: 'Camera or microphone permission was denied. Allow it in the browser settings and try again.',
   camMissing: 'No camera was found on this device.', camBusy: 'The camera is in use by another app.', camInsecure: 'Recording needs a secure page (https or localhost).',
