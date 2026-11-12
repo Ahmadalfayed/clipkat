@@ -55,7 +55,7 @@ export async function render(el, params, ctx) {
     cleanupMedia();
     st.file = file; st.url = URL.createObjectURL(file); st.exported = null;
     const v = document.createElement('video'); v.preload = 'auto'; v.src = st.url;
-    try { await new Promise((ok, no) => { v.onloadedmetadata = ok; v.onerror = () => no(new Error('badFile')); setTimeout(() => no(new Error('badFile')), 8000); }); }
+    try { await new Promise((ok, no) => { v.onloadedmetadata = () => (v.videoWidth > 0 ? ok() : no(new Error('noPicture'))); v.onerror = () => no(new Error('badFile')); setTimeout(() => no(new Error('badFile')), 8000); }); }
     catch {
       // المتصفح لا يقرأ الملف (مثلاً HEVC على بعض المتصفحات): ننشره كما هو والخادم يحوّله
       if (remixType) { toast(t('badVideo'), 'warn'); return; }
