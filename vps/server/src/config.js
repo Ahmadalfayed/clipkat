@@ -35,6 +35,7 @@ export const config = {
   livekitApiUrl: (env.LIVEKIT_API_URL || env.LIVEKIT_URL || '').trim().replace(/^ws/, 'http'),   // داخلي للخادم
   livekitKey: (env.LIVEKIT_API_KEY || '').trim(),
   livekitSecret: (env.LIVEKIT_API_SECRET || '').trim(),
+  turnTlsPort: num(env.TURN_TLS_PORT, 5349),                 // منفذ TURN/TLS الفعلي (LiveKit يعلن 443 دائماً)
   liveMaxViewers: num(env.LIVE_MAX_VIEWERS, 200),
   callRingSec: num(env.CALL_RING_SEC, 35),
   liveHostGraceSec: num(env.LIVE_HOST_GRACE_SEC, 45),

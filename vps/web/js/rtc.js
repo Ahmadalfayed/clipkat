@@ -2,16 +2,28 @@
 // - تحميل مكتبة LiveKit عند الحاجة فقط (≈600KB لا تُحمَّل لمن لا يستخدم الميزتين)
 // - فتح الصوت على iPhone عند أول لمسة، نغمة الرنين، وطلب الكاميرا/المايك
 import { api } from './services/index.js';
+import { fixTurnTls } from './turn-port.js';
 
 const LK_SRC = '/vendor/livekit-client.umd.js?v=2.24.0';
 let lkP = null;
+// LiveKit يعلن خادم TURN/TLS دائماً على المنفذ 443 (يفترض موزّع أحمال أمامه)، بينما يعمل لدينا على منفذ مستقل
+// (5349) لأن 443 يخدم الموقع عبر Caddy. نصحّح المنفذ في إعدادات RTCPeerConnection قبل تحميل المكتبة.
+let turnPort = 5349;
+function patchTurnPort() {
+  const PC = window.RTCPeerConnection; if (!PC || PC.__ckTurn || turnPort === 443) return;
+  const fix = (cfg) => fixTurnTls(cfg, turnPort);
+  function CKPeerConnection(cfg, ...rest) { return new PC(fix(cfg), ...rest); }
+  CKPeerConnection.prototype = PC.prototype; Object.setPrototypeOf(CKPeerConnection, PC); CKPeerConnection.__ckTurn = true;
+  const sc = PC.prototype.setConfiguration; if (sc) PC.prototype.setConfiguration = function (c) { return sc.call(this, fix(c)); };
+  window.RTCPeerConnection = CKPeerConnection;
+}
 export function loadLK() {
   if (window.LivekitClient) return Promise.resolve(window.LivekitClient);
-  return (lkP ||= new Promise((ok, no) => {
+  return (lkP ||= rtcConfig().then((c) => { if (c.turnTlsPort) turnPort = c.turnTlsPort; patchTurnPort(); }).then(() => new Promise((ok, no) => {
     const s = document.createElement('script'); s.src = LK_SRC; s.async = true;
     s.onload = () => ok(window.LivekitClient); s.onerror = () => { lkP = null; s.remove(); no(new Error('lkLoad')); };
     document.head.append(s);
-  }));
+  })));
 }
 export const rq = (method, path, body, opts) => api._req(method, path, body, opts);
 let cfgP = null;

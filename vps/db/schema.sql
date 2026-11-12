@@ -218,7 +218,7 @@ create index if not exists reports_status_idx on reports (status, created_at des
 
 -- توسيع أنواع الإشعارات (إعادة تعريف القيد فقط — لا تُحذف بيانات)
 alter table notifications drop constraint if exists notifications_type_check;
-alter table notifications add constraint notifications_type_check check (type in ('like','comment','follow','system','follow_request','follow_accept','reply'));
+alter table notifications add constraint notifications_type_check check (type in ('like','comment','follow','system','follow_request','follow_accept','reply','remix','live','call'));
 
 create or replace view trending_tags as
   select tag, count(*)::int as count
@@ -342,7 +342,7 @@ exception when duplicate_object then null; end $$;
 create index if not exists videos_source_clip_idx on videos (source_clip_id, created_at desc) where source_clip_id is not null;
 
 alter table notifications drop constraint if exists notifications_type_check;
-alter table notifications add constraint notifications_type_check check (type in ('like','comment','follow','system','follow_request','follow_accept','reply','remix'));
+alter table notifications add constraint notifications_type_check check (type in ('like','comment','follow','system','follow_request','follow_accept','reply','remix','live','call'));
 
 -- =====================================================================
 --  الدخول بحساب Google — إضافات فقط
@@ -405,5 +405,4 @@ create index if not exists calls_callee_idx on calls (callee_id, created_at desc
 create index if not exists calls_caller_idx on calls (caller_id, created_at desc);
 create index if not exists calls_open_idx on calls (created_at) where status in ('ringing','active');
 
-alter table notifications drop constraint if exists notifications_type_check;
-alter table notifications add constraint notifications_type_check check (type in ('like','comment','follow','system','follow_request','follow_accept','reply','remix','live','call'));
+-- (أنواع الإشعارات 'live' و'call' أُضيفت إلى notifications_type_check أعلاه — قيد واحد فقط حتى يبقى الترحيل قابلاً للتكرار)

@@ -235,3 +235,15 @@ test('calls: decline and ring timeout create missed-call entries; busy and block
   assert.equal((await a.get(`/calls/can/${b.me.id}`)).body.reason, 'blocked');
   sa.close();
 });
+
+test('schema migration stays re-runnable with live/call/remix notifications present', { skip }, async () => {
+  const cl = new pg.Client({ connectionString: DB }); await cl.connect();
+  try {
+    const types = (await cl.query("select distinct type from notifications where type in ('live','call')")).rows.map((r) => r.type).sort();
+    assert.deepEqual(types, ['call', 'live']);
+    const u = (await cl.query('select id from profiles limit 2')).rows;
+    await cl.query("insert into notifications (user_id, type, from_id, text) values ($1,'remix',$2,'duet')", [u[0].id, u[1].id]);
+    await cl.query(fs.readFileSync(path.join(here, '../../db/schema.sql'), 'utf8'));     // كما يحدث عند كل إعادة تشغيل
+    await cl.query(fs.readFileSync(path.join(here, '../../db/schema.sql'), 'utf8'));
+  } finally { await cl.end(); }
+});

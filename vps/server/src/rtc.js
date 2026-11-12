@@ -196,7 +196,7 @@ export async function callPolicy(a, b) {
 
 export function buildRtcRouter() {
   const r = express.Router();
-  r.get('/rtc/config', (_req, res) => res.json({ enabled: rtcEnabled(), url: rtcEnabled() ? config.livekitUrl : '', maxSec: config.maxVideoSec, ringSec: config.callRingSec }));
+  r.get('/rtc/config', (_req, res) => res.json({ enabled: rtcEnabled(), url: rtcEnabled() ? config.livekitUrl : '', maxSec: config.maxVideoSec, ringSec: config.callRingSec, turnTlsPort: config.turnTlsPort }));
 
   // ---- SSE ----
   r.get('/events', requireUser, h(async (req, res) => {
