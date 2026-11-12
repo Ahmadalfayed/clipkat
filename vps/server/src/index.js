@@ -63,6 +63,8 @@ async function main() {
   if (!fs.existsSync(config.webDir)) console.warn('web dir not found:', config.webDir);
   await waitForDb(); await migrate(); await ensureAdmin();
   const srv = app.listen(config.port, () => console.log(`[ClipKat] listening on :${config.port}`));
+  // رفع المقاطع من الجوال على شبكة بطيئة قد يتجاوز 5 دقائق (الافتراضي في Node) — نسمح حتى 30 دقيقة
+  srv.requestTimeout = config.uploadTimeoutMs; srv.headersTimeout = 65000;
   startPublisher();
   const stop = () => { srv.close(() => pool.end().then(() => process.exit(0))); setTimeout(() => process.exit(0), 8000).unref(); };
   process.on('SIGTERM', stop); process.on('SIGINT', stop);

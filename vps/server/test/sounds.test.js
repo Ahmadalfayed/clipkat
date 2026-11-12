@@ -101,6 +101,26 @@ test('can attach a sound when publishing and list clips that use it', async () =
   assert.ok(page.some((x) => x.id === v.body.id));
 });
 
+test('regular user can publish with "save as sound" ticked (sound saved, linked, no 500)', async () => {
+  const u = await user('saver' + crypto.randomBytes(2).toString('hex'));
+  const fd = new FormData(); fd.append('file', new Blob([fs.readFileSync(SAMPLE)], { type: 'video/mp4' }), 'v.mp4'); fd.append('caption', 'with sound'); fd.append('saveSound', '1');
+  const r = await u.req('POST', '/videos', undefined, { form: fd });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.ok(r.body.soundId, 'video should link to the extracted sound');
+  const so = await u.get('/sounds/' + r.body.soundId);
+  assert.equal(so.status, 200, JSON.stringify(so.body));
+  const snd = so.body.sound || so.body;
+  assert.equal(snd.sourceVideoId, r.body.id);
+  assert.equal(snd.userId, u.me.id);
+});
+
+test('upload with an empty or wrong MIME type (phone .mov) is accepted by content sniffing', async () => {
+  const u = await user('mover' + crypto.randomBytes(2).toString('hex'));
+  const fd = new FormData(); fd.append('file', new Blob([fs.readFileSync(SAMPLE)]), 'VID_2026.MOV'); fd.append('caption', 'no mime');
+  const r = await u.req('POST', '/videos', undefined, { form: fd });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+});
+
 test('extract-sound from a visible video is idempotent and owned by the video owner', async () => {
   const o = await user('snd_own'); const f = await user('snd_fan');
   const v = await uploadVideo(o, 'extract me');

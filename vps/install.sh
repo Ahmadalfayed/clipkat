@@ -84,7 +84,7 @@ if [ "$KEEP_PASS" = 0 ]; then
   case "$ADMIN_PASSWORD" in *\'*|*\\*|*\"*|*\$*|*\`*) die "كلمة المرور لا يجب أن تحتوي على  ' \" \\ \$ \`  — اختر كلمة أبسط" ;; esac
 fi
 
-MAX_VIDEO_MB="${MAX_VIDEO_MB:-$(env_get MAX_VIDEO_MB)}"; MAX_VIDEO_MB="${MAX_VIDEO_MB:-100}"
+MAX_VIDEO_MB="${MAX_VIDEO_MB:-$(env_get MAX_VIDEO_MB)}"; MAX_VIDEO_MB="${MAX_VIDEO_MB:-500}"
 case "$MAX_VIDEO_MB" in ''|*[!0-9]*) die "MAX_VIDEO_MB يجب أن يكون رقماً" ;; esac
 MAX_BODY="$((MAX_VIDEO_MB + 20))MB"
 

@@ -293,6 +293,9 @@ export function buildRouter() {
 
   r.post('/videos', requireUser, mkLimit(3600000, 60), videoUpload, h(async (req, res) => {
     const vf = req.files?.file?.[0], pf = req.files?.poster?.[0]; const tmp = [vf?.path, pf?.path].filter(Boolean);
+    const placed = []; let committed = false;
+    // حذف ملف نُقل إلى /uploads إذا فشل الحفظ في قاعدة البيانات (لا نترك ملفات يتيمة)
+    const rmUrl = (u) => { if (u && u.startsWith('/uploads/')) rm(path.join(config.uploadDir, u.replace(/^\/uploads\/?/, ''))); };
     try {
       if (!vf) throw bad('bad');
       const ext = sniffVideo(vf.path); if (!ext) throw bad('badFile');
@@ -348,18 +351,32 @@ export function buildRouter() {
           } else rm(outA);
         }
       }
+      placed.push(videoUrl, posterUrl, extracted?.url);
       const row = await tx(async (c) => {
-        const sid = soundId || extracted?.id || null;
-        if (extracted) await c.query('insert into sounds (id, user_id, title, audio_url, duration_ms, source_video_id) values ($1,$2,$3,$4,$5,$6)', [extracted.id, me, extracted.title, extracted.url, extracted.durationMs, id]);
-        const v = (await c.query('insert into videos (id, user_id, video_path, video_url, poster_url, caption, hashtags, sound, sound_id, status, scheduled_at, source_clip_id, remix_type) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning id, user_id, source_clip_id, remix_type, status', [id, me, videoUrl, videoUrl, posterUrl, caption, normTags(hashtags, caption), extracted?.title || soundTitle, sid, status, scheduledAt, sourceClipId, remixType])).rows[0];
+        // المقطع أولاً: الصوت المستخرج يشير إليه (source_video_id) فلا يمكن إدراجه قبله
+        const v = (await c.query('insert into videos (id, user_id, video_path, video_url, poster_url, caption, hashtags, sound, sound_id, status, scheduled_at, source_clip_id, remix_type) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning id, user_id, source_clip_id, remix_type, status', [id, me, videoUrl, videoUrl, posterUrl, caption, normTags(hashtags, caption), soundTitle, soundId, status, scheduledAt, sourceClipId, remixType])).rows[0];
+        if (extracted) {
+          // حفظ الصوت اختياري: إن فشل لا نُفشل نشر المقطع
+          await c.query('savepoint snd');
+          try {
+            await c.query('insert into sounds (id, user_id, title, audio_url, duration_ms, source_video_id) values ($1,$2,$3,$4,$5,$6)', [extracted.id, me, extracted.title, extracted.url, extracted.durationMs, id]);
+            await c.query('update videos set sound_id = $2, sound = $3 where id = $1', [id, extracted.id, extracted.title]);
+            await c.query('release savepoint snd');
+          } catch (e) {
+            console.warn('[videos] saving extracted sound failed:', e.message);
+            await c.query('rollback to savepoint snd');
+            rmUrl(extracted.url);
+          }
+        }
         if (soundId && status === 'published') await c.query('update sounds set uses_count = uses_count + 1 where id = $1', [soundId]);
         const mine = productIds.filter(isUuid).length ? (await c.query('select pr.id from products pr join stores s on s.id = pr.store_id where s.owner_id = $1 and pr.id = any($2::uuid[])', [me, productIds.filter(isUuid)])).rows : [];
         for (const m of mine) await c.query('insert into video_products (video_id, product_id) values ($1,$2) on conflict do nothing', [id, m.id]);
         return v;
       });
-      if (row.status === 'published') await notifyRemix(row);
+      committed = true;
+      if (row.status === 'published') await notifyRemix(row).catch((e) => console.warn('[videos] notifyRemix failed:', e.message));
       res.status(201).json((await queryVideos(req.user, ['v.id = $1'], [row.id], 1, { includeUnpublished: true }))[0]);
-    } finally { tmp.forEach(rm); }
+    } finally { tmp.forEach(rm); if (!committed) placed.forEach(rmUrl); }
   }));
 
   r.delete('/videos/:id', requireUser, h(async (req, res) => {

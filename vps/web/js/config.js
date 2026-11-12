@@ -12,7 +12,7 @@ export const BRAND = Object.freeze({
 // 'api'   : الخادم فقط.      'demo' : الوضع التجريبي المحلي فقط (بيانات في المتصفح، بدون خادم).
 export const DATA_MODE = 'auto';
 export const API_BASE = '';            // فارغ = نفس الموقع. (مثال لخادم آخر: 'https://api.example.com')
-export const MAX_VIDEO_MB = 100;       // قيمة احتياطية؛ الحد الحقيقي يأتي من الخادم (MAX_VIDEO_MB في ملف .env)
+export const MAX_VIDEO_MB = 500;       // قيمة احتياطية؛ الحد الحقيقي يأتي من الخادم (MAX_VIDEO_MB في ملف .env)
 
 export const CURRENCY = 'KWD';
 

@@ -30,7 +30,7 @@ services:
       DATABASE_URL: postgres://clipkat:${DB_PASSWORD}@db:5432/clipkat
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET missing - run install.sh}
       COOKIE_SECURE: ${COOKIE_SECURE:-0}
-      MAX_VIDEO_MB: ${MAX_VIDEO_MB:-100}
+      MAX_VIDEO_MB: ${MAX_VIDEO_MB:-500}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
@@ -52,7 +52,7 @@ services:
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}
       ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
-      MAX_BODY: ${MAX_BODY:-120MB}
+      MAX_BODY: ${MAX_BODY:-520MB}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./data/caddy:/data
