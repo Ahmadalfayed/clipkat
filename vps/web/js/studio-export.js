@@ -83,8 +83,8 @@ export async function exportClip(opts, onProgress = () => {}) {
   const wall = (t1 - t0) / Math.max(0.25, speed);
 
   const maxW = 720;
-  const w = Math.min(maxW, video.videoWidth || maxW);
-  const h = Math.round(w * ((video.videoHeight || 1280) / (video.videoWidth || 720))) || Math.round(w * 16 / 9);
+  const w = Math.min(maxW, video.videoWidth || maxW) & ~1;   // أبعاد زوجية (H.264)
+  const h = (Math.round(w * ((video.videoHeight || 1280) / (video.videoWidth || 720)) / 2) * 2) || Math.round(w * 16 / 9 / 2) * 2;
   const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d');
   const vStream = canvas.captureStream(30);

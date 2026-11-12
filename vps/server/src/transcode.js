@@ -72,7 +72,7 @@ export function plan(info, file) {
 }
 
 // أقصى 1080 للضلع الأقصر (يشمل الطولي 1080×1920)، مع أبعاد زوجية
-const SCALE = "scale=w='if(gt(iw,ih),-2,trunc(min(1080,iw)/2)*2)':h='if(gt(iw,ih),trunc(min(1080,ih)/2)*2,-2)':flags=bicubic";
+const SCALE = "scale=w='if(gt(iw,ih),-2,trunc(min(1080,iw)/2)*2)':h='if(gt(iw,ih),trunc(min(1080,ih)/2)*2,-2)':flags=bicubic:out_range=tv,setsar=1";
 const TONEMAP = 'zscale=t=linear:npl=203,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=mobius:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p';
 
 export function ffmpegArgs(mode, input, output, info, { tonemap = true } = {}) {
@@ -86,7 +86,7 @@ export function ffmpegArgs(mode, input, output, info, { tonemap = true } = {}) {
   const vf = hdr && tonemap ? `${TONEMAP},${SCALE}` : `${SCALE},format=yuv420p`;
   return [...base, '-vf', vf, '-fpsmax', '30',
     '-c:v', 'libx264', '-preset', config.transcodePreset, '-crf', String(config.transcodeCrf), '-profile:v', 'high', '-level:v', '4.1', '-pix_fmt', 'yuv420p',
-    '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-threads', String(config.transcodeThreads),
+    '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv', '-threads', String(config.transcodeThreads),
     ...audio, ...tail];
 }
 

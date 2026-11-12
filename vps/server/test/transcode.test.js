@@ -191,6 +191,9 @@ test('3-minute camera recording (WebM without duration) publishes and converts t
   assert.equal(done.mediaStatus, 'ready'); assert.match(done.src, /\.mp4$/);
   const d = Number(probeJson(onDisk(done.src)).format.duration);
   assert.ok(d > 179 && d < 180.8, 'duration ' + d);
+  const vs = probeJson(onDisk(done.src)).streams.find((x) => x.codec_type === 'video');
+  assert.equal(vs.pix_fmt, 'yuv420p', 'limited (TV) range 4:2:0');
+  assert.ok(!vs.sample_aspect_ratio || vs.sample_aspect_ratio === '1:1', 'square pixels: ' + vs.sample_aspect_ratio);
 });
 test('recording longer than the limit is capped at 180 s during conversion', async () => {
   const u = await user('rec200' + crypto.randomBytes(2).toString('hex'));
