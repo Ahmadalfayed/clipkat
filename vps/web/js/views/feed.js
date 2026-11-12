@@ -100,6 +100,22 @@ export async function render(el, params, ctx) {
   }
   slideEls().forEach(hookSlide);
 
+  // مقاطع صاحبها قيد التجهيز: نتحقق كل 8 ثوانٍ ونبدّل للملف الجاهز تلقائياً
+  const procTimer = setInterval(async () => {
+    if (!el.isConnected) { clearInterval(procTimer); return; }
+    const pending = [...byId.values()].filter((s) => s.v.mediaStatus === 'processing');
+    if (!pending.length || !api.refreshVideo) { clearInterval(procTimer); return; }
+    for (const s of pending) {
+      try {
+        const nv = await api.refreshVideo(s.v.id); if (!nv || nv.mediaStatus === 'processing') continue;
+        s.v = nv; const sl = feed.querySelector(`.slide[data-id="${nv.id}"]`); if (!sl) continue;
+        sl.querySelector('.proc-note')?.remove();
+        const vEl = $('video', sl); if (nv.poster) vEl.poster = nv.poster;
+        if (vEl.dataset.loaded) { const playing = !vEl.paused; vEl.src = await api.videoURL(nv); if (playing) vEl.play().catch(() => {}); }
+      } catch { /* نحاول لاحقاً */ }
+    }
+  }, 8000);
+
   // نقرة: تشغيل الصوت / إيقاف مؤقت — نقرتان: إعجاب
   let lastTap = 0, tapTimer;
   feed.addEventListener('click', async (e) => {
@@ -274,7 +290,7 @@ export async function render(el, params, ctx) {
   };
   document.addEventListener('keydown', onKey);
 
-  return () => { io.disconnect(); document.removeEventListener('keydown', onKey); $$('video', feed).forEach((v) => { v.pause(); v.removeAttribute('src'); v.load(); }); };
+  return () => { clearInterval(procTimer); io.disconnect(); document.removeEventListener('keydown', onKey); $$('video', feed).forEach((v) => { v.pause(); v.removeAttribute('src'); v.load(); }); };
 }
 
 function slideHTML({ v, user, stats, products, following, store }, idx) {
@@ -285,6 +301,7 @@ function slideHTML({ v, user, stats, products, following, store }, idx) {
     <div class="tap-layer" aria-hidden="true"></div>
     <div class="flash" aria-live="polite"></div>
     <div class="mute-hint">${icon('volOff', { size: 18 })}<span>${esc(t('tapUnmute'))}</span></div>
+    ${v.mediaStatus === 'processing' ? `<div class="proc-note" role="status">⏳ ${esc(t('processingNote'))}</div>` : ''}
     <aside class="rail">
       <div class="rail-av"><a href="#/profile/${user?.id}" aria-label="@${esc(user?.username)}"><img src="${avatarOf(user)}" alt="" class="av"></a>
         <button class="follow-plus ${following ? 'done' : ''}" data-a="follow" aria-label="${esc(following ? t('unfollow') : t('follow'))}">${icon(following ? 'check' : 'plus', { size: 14 })}</button></div>

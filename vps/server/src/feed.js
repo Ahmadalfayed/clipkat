@@ -17,7 +17,7 @@ export async function forYou({ viewer, cursor = null, limit = 8, excludeSeen = t
   const params = [];
   const add = (v) => { params.push(v); return `$${params.length}`; };
   const vid = add(viewer?.id || null);
-  let vis = `not v.is_hidden and v.status = 'published'`;
+  let vis = `not v.is_hidden and v.status = 'published' and v.media_status <> 'processing'`;
   if (!viewer?.is_admin) vis += ` and ${visibleSql('v.user_id', `${vid}::uuid`)}`;
 
   const scoreSql = `(

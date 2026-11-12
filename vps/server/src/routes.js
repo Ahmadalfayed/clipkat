@@ -1,3 +1,4 @@
+import { analyze, plan, kick as kickTranscoder } from './transcode.js';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import crypto from 'node:crypto';
@@ -238,6 +239,8 @@ export function buildRouter() {
     if (!viewer?.is_admin) { params.push(viewer?.id || null); where.push(visibleSql('v.user_id', `$${params.length}::uuid`)); }
     if (!opts.includeUnpublished) where.push(`v.status = 'published'`);
     else if (!viewer?.is_admin) { params.push(viewer?.id || null); where.push(`(v.status = 'published' or v.user_id = $${params.length})`); }
+    // المقطع قيد التحويل يراه صاحبه فقط (مع ملاحظة «جارٍ تجهيز المقطع…»)
+    if (!viewer?.is_admin) { params.push(viewer?.id || null); where.push(`(v.media_status <> 'processing' or v.user_id = $${params.length})`); }
     const sql = `select ${VIDEO_COLS} from videos v where not v.is_hidden ${where.length ? 'and ' + where.join(' and ') : ''} order by v.created_at desc limit ${limit}`;
     return enrichRemix((await q(sql, params)).rows.map(mapVideo), viewer);
   }
@@ -300,6 +303,7 @@ export function buildRouter() {
       if (!vf) throw bad('bad');
       const ext = sniffVideo(vf.path); if (!ext) throw bad('badFile');
       const info = await probe(vf.path);
+      if (info && !info.hasVideo) throw bad('badFile');
       if (info && info.duration > config.maxVideoSec + 0.4) throw new HttpError(400, 'tooLong', { limit: config.maxVideoSec });
       const b = req.body || {}; const caption = str(b.caption, 300);
       let soundTitle = b.sound ? str(b.sound, 80) : null;
@@ -328,13 +332,17 @@ export function buildRouter() {
       if (!Array.isArray(productIds)) productIds = [];
       const id = crypto.randomUUID(); const me = req.user.id;
       // الصورة المصغّرة: من المتصفح إن وُجدت وإلا ffmpeg
-      let posterUrl = null;
+      let posterUrl = null, posterAuto = false;
       if (pf && sniffImage(pf.path)) posterUrl = place(pf.path, 'images', me, `poster-${id}.${sniffImage(pf.path)}`);
       else {
+        posterAuto = true;
         const out = path.join(dirs.tmp, `${rid()}.jpg`);
         if (await makePoster(vf.path, out)) posterUrl = place(out, 'images', me, `poster-${id}.jpg`); else rm(out);
       }
       const videoUrl = place(vf.path, 'videos', me, `${id}.${ext}`);
+      // هل يحتاج تحويلاً ليعمل على كل المتصفحات؟ (HEVC من آيفون/هواوي، WebM، 10-bit/HDR، أكبر من 1080p…)
+      const vAbs = path.join(config.uploadDir, videoUrl.replace(/^\/uploads\/?/, ''));
+      const mediaStatus = config.transcode && plan(await analyze(vAbs), vAbs) !== 'ready' ? 'processing' : 'ready';
       // استخراج صوت أصلي من المقطع (اختياري) — قبل المعاملة حتى لا نطول القفل
       let extracted = null;
       if (wantSave && !soundId && status === 'published') {
@@ -354,7 +362,7 @@ export function buildRouter() {
       placed.push(videoUrl, posterUrl, extracted?.url);
       const row = await tx(async (c) => {
         // المقطع أولاً: الصوت المستخرج يشير إليه (source_video_id) فلا يمكن إدراجه قبله
-        const v = (await c.query('insert into videos (id, user_id, video_path, video_url, poster_url, caption, hashtags, sound, sound_id, status, scheduled_at, source_clip_id, remix_type) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning id, user_id, source_clip_id, remix_type, status', [id, me, videoUrl, videoUrl, posterUrl, caption, normTags(hashtags, caption), soundTitle, soundId, status, scheduledAt, sourceClipId, remixType])).rows[0];
+        const v = (await c.query('insert into videos (id, user_id, video_path, video_url, poster_url, caption, hashtags, sound, sound_id, status, scheduled_at, source_clip_id, remix_type, media_status, poster_auto) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning id, user_id, source_clip_id, remix_type, status, media_status', [id, me, videoUrl, videoUrl, posterUrl, caption, normTags(hashtags, caption), soundTitle, soundId, status, scheduledAt, sourceClipId, remixType, mediaStatus, posterAuto])).rows[0];
         if (extracted) {
           // حفظ الصوت اختياري: إن فشل لا نُفشل نشر المقطع
           await c.query('savepoint snd');
@@ -374,7 +382,8 @@ export function buildRouter() {
         return v;
       });
       committed = true;
-      if (row.status === 'published') await notifyRemix(row).catch((e) => console.warn('[videos] notifyRemix failed:', e.message));
+      if (row.media_status === 'processing') kickTranscoder();
+      else if (row.status === 'published') await notifyRemix(row).catch((e) => console.warn('[videos] notifyRemix failed:', e.message));
       res.status(201).json((await queryVideos(req.user, ['v.id = $1'], [row.id], 1, { includeUnpublished: true }))[0]);
     } finally { tmp.forEach(rm); if (!committed) placed.forEach(rmUrl); }
   }));

@@ -1,4 +1,4 @@
-# صورة تطبيق كليب كات (Node.js + ffmpeg لتوليد الصور المصغّرة)
+# صورة تطبيق كليب كات (Node.js + ffmpeg: الصور المصغّرة وتحويل المقاطع إلى MP4 H.264 مع zscale/tonemap لمقاطع HDR)
 FROM node:20-alpine
 RUN apk add --no-cache ffmpeg tini wget
 WORKDIR /app

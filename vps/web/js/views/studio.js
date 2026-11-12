@@ -5,7 +5,16 @@ import { icon, esc, $, $$, toast, productImg } from '../ui.js';
 import { pageHead } from './common.js';
 import { FILTERS, SPEEDS, recorderSupported, pickRecorderMime, exportClip, exportDuet, exportStitch, captureFrame, blobToFile } from '../studio-export.js';
 
-const MAX_REC = 60;
+const MAX_REC = 60;   // حد التصوير بالكاميرا داخل الاستوديو
+const maxClip = () => api.maxVideoSec || 180;   // القص الافتراضي: المقطع كاملاً حتى الحد
+export function uploadErrorText(err) {
+  const m = String(err?.message || '');
+  if (m === 'tooLarge') return t('fileTooLarge', { n: err.limit });
+  if (m === 'tooLong') return t('videoTooLong', { n: err.limit });
+  if (m === 'badFile') return t('badVideo');
+  if (err?.name === 'AbortError' || /failed to fetch|networkerror|load failed|network/i.test(m)) return t('uploadNetFail');
+  return t('uploadFailed');
+}
 
 export async function render(el, params, ctx) {
   if (!(await ctx.requireLogin())) return;
@@ -46,11 +55,16 @@ export async function render(el, params, ctx) {
     cleanupMedia();
     st.file = file; st.url = URL.createObjectURL(file); st.exported = null;
     const v = document.createElement('video'); v.preload = 'auto'; v.src = st.url;
-    await new Promise((ok, no) => { v.onloadedmetadata = ok; v.onerror = () => no(new Error('badFile')); setTimeout(() => no(new Error('badFile')), 8000); });
+    try { await new Promise((ok, no) => { v.onloadedmetadata = ok; v.onerror = () => no(new Error('badFile')); setTimeout(() => no(new Error('badFile')), 8000); }); }
+    catch {
+      // المتصفح لا يقرأ الملف (مثلاً HEVC على بعض المتصفحات): ننشره كما هو والخادم يحوّله
+      if (remixType) { toast(t('badVideo'), 'warn'); return; }
+      toast(t('rawUploadNote'), 'warn'); st.step = 'publish'; await draw(); return;
+    }
     const dur = v.duration;
     if (!Number.isFinite(dur) || dur < 0.2) { toast(t('badVideo'), 'warn'); return; }
     if (dur > (api.maxVideoSec || 180) + 0.5) { toast(t('videoTooLong', { n: api.maxVideoSec || 180 }), 'warn'); }
-    st.start = 0; st.end = Math.min(dur, MAX_REC); st.cover = Math.min(0.4, st.end / 2);
+    st.start = 0; st.end = Math.min(dur, maxClip()); st.cover = Math.min(0.4, st.end / 2);
     st.step = 'edit'; await draw();
   };
 
@@ -235,7 +249,7 @@ export async function render(el, params, ctx) {
         $('#t0', el).value = st.start; $('#t1', el).value = st.end;
         $('#trimLbl', el).textContent = `${durLabel(st.start)} — ${durLabel(st.end)}`;
       };
-      v.addEventListener('loadedmetadata', () => { if (!st.end || st.end > v.duration) st.end = Math.min(v.duration, MAX_REC); syncTrim(); applyLook(); });
+      v.addEventListener('loadedmetadata', () => { if (!st.end || st.end > v.duration) st.end = Math.min(v.duration, maxClip()); syncTrim(); applyLook(); });
       v.addEventListener('timeupdate', () => { if (v.currentTime >= st.end) { v.pause(); v.currentTime = st.start; } });
       applyLook();
       el.querySelectorAll('[data-sp]').forEach((b) => b.addEventListener('click', () => { st.speed = Number(b.dataset.sp); el.querySelectorAll('[data-sp]').forEach((x) => x.classList.toggle('on', x === b)); applyLook(); }));
@@ -272,6 +286,7 @@ export async function render(el, params, ctx) {
           st.step = 'publish'; await draw();
         } catch (e) {
           console.warn(e);
+          if (!remixType && st.file) { toast(t('rawUploadNote'), 'warn'); st.exported = null; st.step = 'publish'; await draw(); return; }   // نشر الأصل والخادم يجهّزه
           toast(t(e.message === 'noRecorder' ? 'noRecorderHint' : 'exportFail'), 'warn');
           btn.disabled = false; btn.textContent = t('exportNext');
         }
@@ -317,9 +332,9 @@ export async function render(el, params, ctx) {
         if (when === 'draft') payload.status = 'draft';
         if (when === 'schedule') { payload.status = 'scheduled'; payload.scheduledAt = new Date(fd.get('scheduledAt')).toISOString(); if (!fd.get('scheduledAt') || Number.isNaN(+new Date(fd.get('scheduledAt')))) { toast(t('scheduleNeed'), 'warn'); btn.disabled = false; btn.textContent = t('publish'); return; } }
         const v = await api.createVideo(payload);
-        toast(when === 'draft' ? t('draftSaved') : when === 'schedule' ? t('scheduledOk') : t('published'), 'ok'); cleanupMedia(); ctx.navigate(when === 'now' ? '#/watch/' + v.id : '#/drafts');
+        toast(when === 'draft' ? t('draftSaved') : when === 'schedule' ? t('scheduledOk') : v.mediaStatus === 'processing' ? t('publishedProcessing') : t('published'), 'ok'); cleanupMedia(); ctx.navigate(when === 'now' ? '#/watch/' + v.id : '#/drafts');
       } catch (err) {
-        console.warn(err); toast(err.message === 'tooLarge' ? t('fileTooLarge', { n: err.limit }) : err.message === 'tooLong' ? t('videoTooLong', { n: err.limit }) : err.message, 'warn');
+        console.warn(err); toast(uploadErrorText(err), 'warn');
         btn.disabled = false; btn.textContent = t('publish');
       }
     });

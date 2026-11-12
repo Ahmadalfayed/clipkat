@@ -2,6 +2,7 @@ import { api } from '../services/index.js';
 import { t, fmtKWD } from '../i18n.js';
 import { icon, esc, $, $$, toast, productImg } from '../ui.js';
 import { pageHead } from './common.js';
+import { uploadErrorText } from './studio.js';
 
 export async function render(el, params, ctx) {
   if (!(await ctx.requireLogin())) return;
@@ -46,8 +47,8 @@ export async function render(el, params, ctx) {
     try {
       const fd = new FormData(form);
       const v = await api.createVideo({ file, poster, caption: fd.get('caption'), hashtags: String(fd.get('hashtags') || '').split(/[\s,،]+/).filter(Boolean), sound: fd.get('sound')?.trim() || null, productIds: $$('input[name=products]:checked', form).map((i) => i.value) });
-      toast(t('published'), 'ok'); ctx.navigate('#/watch/' + v.id);
-    } catch (err) { console.warn(err); toast(err.message === 'tooLarge' ? t('fileTooLarge', { n: err.limit }) : err.message, 'warn'); btn.disabled = false; btn.textContent = t('publish'); }
+      toast(v.mediaStatus === 'processing' ? t('publishedProcessing') : t('published'), 'ok'); ctx.navigate('#/watch/' + v.id);
+    } catch (err) { console.warn(err); toast(uploadErrorText(err), 'warn'); btn.disabled = false; btn.textContent = t('publish'); }
   });
   return () => { prev.pause(); if (url) setTimeout(() => URL.revokeObjectURL(url), 1000); };
 }

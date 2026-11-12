@@ -11,6 +11,7 @@ import { csrfGuard } from './auth.js';
 import { ensureDirs } from './uploads.js';
 import { hashPassword, HttpError } from './util.js';
 import { startPublisher } from './publisher.js';
+import { startTranscoder } from './transcode.js';
 
 if (!config.jwtSecret || config.jwtSecret.length < 32) { console.error('JWT_SECRET missing or too short (>=32 chars). Run install.sh or set it in .env'); process.exit(1); }
 
@@ -66,6 +67,7 @@ async function main() {
   // رفع المقاطع من الجوال على شبكة بطيئة قد يتجاوز 5 دقائق (الافتراضي في Node) — نسمح حتى 30 دقيقة
   srv.requestTimeout = config.uploadTimeoutMs; srv.headersTimeout = 65000;
   startPublisher();
+  if (config.transcode) startTranscoder(config.transcodePollMs);
   const stop = () => { srv.close(() => pool.end().then(() => process.exit(0))); setTimeout(() => process.exit(0), 8000).unref(); };
   process.on('SIGTERM', stop); process.on('SIGINT', stop);
 }

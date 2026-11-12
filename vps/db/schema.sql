@@ -349,3 +349,16 @@ alter table notifications add constraint notifications_type_check check (type in
 -- =====================================================================
 alter table profiles add column if not exists google_sub text;
 create unique index if not exists profiles_google_sub_uidx on profiles (google_sub) where google_sub is not null;
+
+-- =====================================================================
+--  تجهيز المقاطع لكل المتصفحات (تحويل إلى MP4 H.264) — إضافات فقط
+--  processing = قيد التحويل ومخفي عن العامة | reprocess = قيد التحويل لكنه ظاهر (مقاطع قديمة)
+--  ready = جاهز | failed = فشل التحويل ويُعرض الأصل
+-- =====================================================================
+alter table videos add column if not exists media_status text not null default 'ready';
+alter table videos add column if not exists media_error text;
+alter table videos add column if not exists poster_auto boolean not null default false;
+do $$ begin
+  alter table videos add constraint videos_media_status_chk check (media_status in ('processing','reprocess','ready','failed'));
+exception when duplicate_object then null; end $$;
+create index if not exists videos_media_queue_idx on videos (created_at) where media_status in ('processing','reprocess');

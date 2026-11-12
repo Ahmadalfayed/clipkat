@@ -36,6 +36,10 @@ services:
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      TRANSCODE: ${TRANSCODE:-1}
+      TRANSCODE_PRESET: ${TRANSCODE_PRESET:-veryfast}
+      TRANSCODE_CRF: ${TRANSCODE_CRF:-23}
+      TRANSCODE_THREADS: ${TRANSCODE_THREADS:-2}
     volumes:
       - ./data/uploads:/data/uploads
     networks: [internal]

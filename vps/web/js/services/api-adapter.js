@@ -112,6 +112,7 @@ export class ApiAdapter {
     if (!id || !UUID_RE.test(id)) return null; if (this.videos.has(id)) return this.videos.get(id);
     const v = await this._req('GET', '/videos/' + id); return v ? (await this._vids([v]))[0] : null;
   }
+  async refreshVideo(id) { const v = await this._req('GET', '/videos/' + id); return v ? this._mapVideo(v) : null; }
   async videoURL(v) { return v.src; }
   async createVideo({ file, poster, caption = '', hashtags = [], sound, soundId, saveSound = false, productIds = [], status, scheduledAt, sourceClipId, remixType } = {}) {
     await this._meOrThrow();
