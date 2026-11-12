@@ -11,11 +11,30 @@ export const FILTERS = {
 };
 export const SPEEDS = [0.5, 0.75, 1, 1.5, 2];
 
+import { pickRecorderMime as pickMime, isWebKitUA, recordedType } from './rec-mime.js';
+const nav = () => (typeof navigator !== 'undefined' ? navigator : {});
+export const isWebKit = () => isWebKitUA(nav().userAgent || '', '', nav().maxTouchPoints || 0);
 export function pickRecorderMime() {
-  if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return '';
-  return ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
+  if (typeof MediaRecorder === 'undefined') return '';
+  return pickMime({ isTypeSupported: MediaRecorder.isTypeSupported ? (t) => MediaRecorder.isTypeSupported(t) : null, ua: nav().userAgent || '', maxTouchPoints: nav().maxTouchPoints || 0 });
 }
-export const recorderSupported = () => typeof MediaRecorder !== 'undefined' && !!pickRecorderMime();
+// غير مدعوم فقط إن لم يوجد MediaRecorder أصلاً
+export const recorderSupported = () => typeof MediaRecorder !== 'undefined';
+// إنشاء MediaRecorder بأفضل الإعدادات ثم التراجع تدريجياً حتى «بلا mimeType» (سفاري يختار MP4 بنفسه)
+export function makeRecorder(stream, { videoBitsPerSecond = 2_500_000, audioBitsPerSecond = 128_000 } = {}) {
+  if (typeof MediaRecorder === 'undefined') throw new Error('noRecorder');
+  const mime = pickRecorderMime();
+  const tries = [];
+  if (mime) tries.push({ mimeType: mime, videoBitsPerSecond, audioBitsPerSecond }, { mimeType: mime });
+  tries.push({ videoBitsPerSecond, audioBitsPerSecond }, {});
+  for (const o of tries) { try { const r = new MediaRecorder(stream, o); r._ckMime = mime; return r; } catch { /* التالي */ } }
+  try { const r = new MediaRecorder(stream); r._ckMime = ''; return r; } catch { throw new Error('noRecorder'); }
+}
+// Blob نهائي بالنوع الصحيح (MP4 على سفاري)
+export function finishBlob(chunks, rec) {
+  const { type } = recordedType(rec.mimeType, chunks[0]?.type, rec._ckMime, isWebKit());
+  return new Blob(chunks, { type });
+}
 
 function wait(el, ev) { return new Promise((ok) => el.addEventListener(ev, ok, { once: true })); }
 async function seek(el, t) { el.currentTime = Math.max(0, t); if (Math.abs((el.currentTime || 0) - t) > 0.05) await wait(el, 'seeked'); }
@@ -54,8 +73,7 @@ function paint(ctx, video, w, h, filter, texts) {
 // يصدّر المقطع المحرّر. يُرجع { blob, mime, poster } أو يرمي خطأ واضحاً.
 export async function exportClip(opts, onProgress = () => {}) {
   const { sourceUrl, start = 0, end, speed = 1, filter = 'none', texts = [], coverTime, soundUrl = null, volOrig = 1, volSound = 1 } = opts;
-  const mime = pickRecorderMime();
-  if (!mime) throw new Error('noRecorder');
+  if (typeof MediaRecorder === 'undefined') throw new Error('noRecorder');
   const video = document.createElement('video');
   video.playsInline = true; video.muted = true; video.preload = 'auto'; video.src = sourceUrl; video.crossOrigin = 'anonymous';
   await Promise.race([wait(video, 'loadeddata'), new Promise((_, no) => setTimeout(() => no(new Error('load')), 15000))]);
@@ -99,7 +117,7 @@ export async function exportClip(opts, onProgress = () => {}) {
     if (at) tracks.push(at);
     if (actx.state === 'suspended') await actx.resume().catch(() => {});
 
-    const rec = new MediaRecorder(new MediaStream(tracks), { mimeType: mime, videoBitsPerSecond: 2_500_000 });
+    const rec = makeRecorder(new MediaStream(tracks));
     const chunks = [];
     rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     const stopped = new Promise((ok, no) => { rec.onstop = ok; rec.onerror = () => no(new Error('record')); });
@@ -123,14 +141,14 @@ export async function exportClip(opts, onProgress = () => {}) {
     await stopped; clearTimeout(killer);
     running = false;
     video.pause(); vAud.pause(); aEl?.pause();
-    const blob = new Blob(chunks, { type: rec.mimeType || mime });
+    const blob = finishBlob(chunks, rec);
     if (!blob.size) throw new Error('empty');
     const posterAt = Math.min(t1, Math.max(t0, coverTime ?? (t0 + (t1 - t0) / 2)));
     const poster = await captureFrame(video, posterAt, { filter, texts });
     onProgress(1);
     await stopAudio();
     video.removeAttribute('src'); video.load(); vAud.removeAttribute('src'); vAud.load();
-    return { blob, mime: blob.type || mime, poster, duration: wall };
+    return { blob, mime: blob.type, poster, duration: wall };
   } catch (e) {
     await stopAudio(); throw e;
   }
@@ -196,8 +214,7 @@ async function mixAudio(actx, dest, els) {
 }
 
 async function recordCanvas(canvas, audioEls, durationSec, onFrame, onProgress) {
-  const mime = pickRecorderMime();
-  if (!mime) throw new Error('noRecorder');
+  if (typeof MediaRecorder === 'undefined') throw new Error('noRecorder');
   const vStream = canvas.captureStream(30);
   const tracks = [...vStream.getVideoTracks()];
   let actx = null, dest = null;
@@ -209,7 +226,7 @@ async function recordCanvas(canvas, audioEls, durationSec, onFrame, onProgress) 
     const at = dest.stream.getAudioTracks()[0];
     if (at) tracks.push(at);
     if (actx.state === 'suspended') await actx.resume().catch(() => {});
-    const rec = new MediaRecorder(new MediaStream(tracks), { mimeType: mime, videoBitsPerSecond: 2_500_000 });
+    const rec = makeRecorder(new MediaStream(tracks));
     const chunks = [];
     rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     const stopped = new Promise((ok, no) => { rec.onstop = ok; rec.onerror = () => no(new Error('record')); });
@@ -228,10 +245,10 @@ async function recordCanvas(canvas, audioEls, durationSec, onFrame, onProgress) 
     const killer = setTimeout(() => { if (rec.state !== 'inactive') rec.stop(); }, durationSec * 1000 + 1500);
     await stopped; clearTimeout(killer);
     running = false;
-    const blob = new Blob(chunks, { type: rec.mimeType || mime });
+    const blob = finishBlob(chunks, rec);
     if (!blob.size) throw new Error('empty');
     await stopAudio();
-    return { blob, mime: blob.type || mime, duration: durationSec };
+    return { blob, mime: blob.type, duration: durationSec };
   } catch (e) {
     await stopAudio(); throw e;
   }
@@ -332,6 +349,6 @@ export async function exportStitch(opts, onProgress = () => {}) {
 }
 
 export function blobToFile(blob, mime) {
-  const ext = /mp4/i.test(mime) ? 'mp4' : 'webm';
-  return new File([blob], `clipkat-${Date.now()}.${ext}`, { type: mime || blob.type });
+  const { type, ext } = recordedType(mime || blob.type, blob.type, '', isWebKit());
+  return new File([blob], `clipkat-${Date.now()}.${ext}`, { type });
 }

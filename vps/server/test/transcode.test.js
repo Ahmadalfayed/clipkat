@@ -201,3 +201,16 @@ test('recording longer than the limit is capped at 180 s during conversion', asy
   const d = Number(probeJson(onDisk(done.src)).format.duration);
   assert.ok(d <= 180.8 && d > 179, 'capped duration ' + d);
 });
+
+test('iPhone Safari MediaRecorder file (fragmented MP4, H.264/AAC, .mp4) is accepted and playable', async () => {
+  const u = await user('iosrec' + crypto.randomBytes(2).toString('hex'));
+  const f = path.join(fx, 'rec-ios.mp4');
+  ff(['-f', 'lavfi', '-i', 'testsrc2=size=360x640:rate=30', '-f', 'lavfi', '-i', 'sine=frequency=600', '-t', '3', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', '-movflags', 'frag_keyframe+empty_moov+default_base_moof', f]);
+  const fd = new FormData(); fd.append('file', new Blob([fs.readFileSync(f)], { type: 'video/mp4' }), 'rec-1794490000000.mp4'); fd.append('caption', 'ios');
+  const r = await u.req('POST', '/videos', undefined, { form: fd });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const done = await waitStatus(u, r.body.id);
+  assert.equal(done.mediaStatus, 'ready'); assert.match(done.src, /\.mp4$/);
+  const v = probeJson(onDisk(done.src)).streams.find((s) => s.codec_type === 'video');
+  assert.equal(v.codec_name, 'h264');
+});

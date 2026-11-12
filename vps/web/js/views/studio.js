@@ -3,7 +3,7 @@ import { api } from '../services/index.js';
 import { t, fmtKWD } from '../i18n.js';
 import { icon, esc, $, $$, toast, productImg } from '../ui.js';
 import { pageHead } from './common.js';
-import { FILTERS, SPEEDS, recorderSupported, pickRecorderMime, exportClip, exportDuet, exportStitch, captureFrame, blobToFile } from '../studio-export.js';
+import { FILTERS, SPEEDS, recorderSupported, makeRecorder, finishBlob, exportClip, exportDuet, exportStitch, captureFrame, blobToFile } from '../studio-export.js';
 
 import { recLimitSec, recState, recExt, fmtClock, REC_TIMESLICE_MS, REC_VIDEO_BPS, REC_AUDIO_BPS } from '../rec-limits.js';
 const maxRec = () => recLimitSec(api.maxVideoSec);   // حد التصوير بالكاميرا = حد المقطع (3 دقائق)
@@ -91,8 +91,10 @@ export async function render(el, params, ctx) {
     return t('camFail');
   };
 
-  async function startCamera(preview) {
-    st.stream?.getTracks().forEach((t) => t.stop());
+  // الكاميرا تُطلب مباشرة من نقرة المستخدم (iOS يشترط ذلك)، ثم تُربط بعنصر المعاينة
+  async function acquireCamera() {
+    st.stream?.getTracks().forEach((t) => t.stop()); st.stream = null;
+    if (!navigator.mediaDevices?.getUserMedia) { toast(t('noRecorderHint'), 'warn'); return false; }
     try {
       st.stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
@@ -104,8 +106,24 @@ export async function render(el, params, ctx) {
         catch (e2) { toast(recError(e2), 'warn'); return false; }
       } else { toast(recError(e), 'warn'); return false; }
     }
-    preview.srcObject = st.stream; preview.muted = true; await preview.play().catch(() => {});
     return true;
+  }
+  async function attachCamera(preview) {
+    // iOS: بدون playsinline + muted تبقى المعاينة سوداء أو تفتح ملء الشاشة
+    preview.muted = true; preview.defaultMuted = true; preview.autoplay = true; preview.playsInline = true;
+    preview.setAttribute('playsinline', ''); preview.setAttribute('webkit-playsinline', ''); preview.setAttribute('muted', '');
+    preview.srcObject = st.stream;
+    try { await preview.play(); }
+    catch {
+      // إن منع المتصفح التشغيل التلقائي: لمسة واحدة على المعاينة تشغّلها
+      const host = preview.parentElement || preview;
+      host.addEventListener('click', () => preview.play().catch(() => {}), { once: true });
+      toast(t('tapToStartCam'), 'ok');
+    }
+  }
+  async function startCamera(preview) {
+    if (!(await acquireCamera())) return false;
+    await attachCamera(preview); return true;
   }
 
   const layoutChips = () => st.layout === 'tb'
@@ -170,6 +188,7 @@ export async function render(el, params, ctx) {
       </div>`;
       $('#btnFile input', el).addEventListener('change', (e) => { const f = e.target.files[0]; if (f) useFile(f); });
       $('#btnCam', el)?.addEventListener('click', async () => {
+        if (!(await acquireCamera())) return;          // من داخل النقرة نفسها
         st.step = 'camera'; await draw();
       });
       return;
@@ -187,7 +206,8 @@ export async function render(el, params, ctx) {
           <button class="btn primary rec-btn" id="rec">${esc(t('startRec'))}</button>
         </div></div>`;
       const preview = $('.cam', el);
-      if (!(await startCamera(preview))) { st.step = 'source'; await draw(); return; }
+      if (!st.stream?.active && !(await acquireCamera())) { st.step = 'source'; await draw(); return; }
+      await attachCamera(preview);
       bindLayoutChips(el);
       const srcVid = $('.duet-src', el);
       if (srcVid) srcVid.play().catch(() => {});
@@ -195,15 +215,14 @@ export async function render(el, params, ctx) {
       $('#rec', el).addEventListener('click', async () => {
         const btn = $('#rec', el);
         if (st.rec && st.rec.state === 'recording') { st.rec.stop(); return; }
-        const mime = pickRecorderMime();
-        if (!mime) { toast(t('noRecorderHint'), 'warn'); return; }
+        if (!st.stream?.active) { if (!(await acquireCamera())) return; await attachCamera($('.cam', el)); }
         const chunks = [];
-        try { st.rec = new MediaRecorder(st.stream, { mimeType: mime, videoBitsPerSecond: REC_VIDEO_BPS, audioBitsPerSecond: REC_AUDIO_BPS }); }
-        catch { try { st.rec = new MediaRecorder(st.stream, { mimeType: mime }); } catch { toast(t('noRecorderHint'), 'warn'); return; } }
+        try { st.rec = makeRecorder(st.stream, { videoBitsPerSecond: REC_VIDEO_BPS, audioBitsPerSecond: REC_AUDIO_BPS }); }
+        catch { toast(t('noRecorderHint'), 'warn'); return; }
         st.rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
         st.rec.onstop = async () => {
           clearInterval(st.recTimer); st.recTimer = null;
-          const blob = new Blob(chunks, { type: st.rec.mimeType || mime });
+          const blob = finishBlob(chunks, st.rec);   // MP4 على سفاري/آيفون، WebM على كروم
           st.stream?.getTracks().forEach((t) => t.stop()); st.stream = null;
           if (!blob.size) { toast(t('recEmpty'), 'warn'); st.step = 'source'; await draw(); return; }
           await useFile(new File([blob], `rec-${Date.now()}.${recExt(blob.type)}`, { type: blob.type }), { durHint: st.recSec });
