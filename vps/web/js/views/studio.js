@@ -313,9 +313,9 @@ export async function render(el, params, ctx) {
             : `<p class="muted sm">${esc(store && !active ? t('storeInactive') : t('noStoreForTag'))} <a href="${store ? '#/dashboard' : '#/rent'}">${esc(store ? t('dashboard') : t('rentNow'))}</a></p>`}
         </fieldset>
         <button class="btn primary block lg" type="submit">${esc(t('publish'))}</button>
-        <button class="btn ghost block" type="button" id="backEdit">${esc(t('backEdit'))}</button>
+        ${st.exported ? `<button class="btn ghost block" type="button" id="backEdit">${esc(t('backEdit'))}</button>` : ''}
       </form></div>`;
-    $('#backEdit', el).addEventListener('click', async () => { st.step = 'edit'; st.exported = null; await draw(); });
+    $('#backEdit', el)?.addEventListener('click', async () => { st.step = 'edit'; st.exported = null; await draw(); });
     el.querySelectorAll('input[name=when]').forEach((r) => r.addEventListener('change', () => { $('#schedWrap', el).hidden = el.querySelector('input[name=when]:checked')?.value !== 'schedule'; }));
     $('#pub', el).addEventListener('submit', async (e) => {
       e.preventDefault(); if (!file) { toast(t('pickFirst'), 'warn'); return; }
