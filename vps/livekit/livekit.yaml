@@ -1,0 +1,36 @@
+# خادم الوسائط LiveKit (البث المباشر والمكالمات) — بدون أسرار هنا.
+# المفاتيح تأتي من المتغير LIVEKIT_KEYS (من .env)، وعنوان IP العام من --node-ip.
+# الشبكة: network_mode host. المنافذ العامة (ufw):
+#   7881/tcp  ICE عبر TCP (للشبكات التي تحجب UDP)
+#   7882/udp  الوسائط (منفذ UDP واحد مُجمَّع)
+#   3478/udp  TURN/UDP      5349/tcp  TURN/TLS (لشبكات الجوال/الشركات المقيّدة)
+#   7880/tcp  الإشارة (WebSocket) — غير مكشوف للعالم؛ يمر عبر Caddy على https://live.<domain>
+port: 7880
+bind_addresses: ["0.0.0.0"]
+log_level: info
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: false
+  allow_tcp_fallback: true
+  congestion_control:
+    enabled: true
+    allow_pause: true
+turn:
+  enabled: true
+  domain: live.clipkat.live
+  tls_port: 5349
+  udp_port: 3478
+  cert_file: /certs/live.clipkat.live/live.clipkat.live.crt
+  key_file: /certs/live.clipkat.live/live.clipkat.live.key
+room:
+  auto_create: true
+  empty_timeout: 300
+  departure_timeout: 30
+  enabled_codecs:
+    - mime: audio/opus
+    - mime: audio/red
+    - mime: video/vp8
+    - mime: video/h264
+limit:
+  bytes_per_sec: 0

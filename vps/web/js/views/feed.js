@@ -1,4 +1,5 @@
 import { api } from '../services/index.js';
+import { rtcConfig, rq } from '../rtc.js';
 import { t, fmtNum, fmtKWD, timeAgo, lang } from '../i18n.js';
 import { icon, esc, $, $$, toast, openSheet, avatarOf, productImg, emptyState, verifiedBadge } from '../ui.js';
 import { prefsButtons, brandHTML } from '../app.js';
@@ -8,6 +9,11 @@ import { POLICY } from '../policy-text.js';
 let muted = true; // يبدأ صامتاً (سياسة التشغيل التلقائي في المتصفحات)
 
 const linkify = (s) => esc(s).replace(/#([\p{L}\p{N}_]+)/gu, (m, tag) => `<a href="#/tag/${encodeURIComponent(tag)}" class="htag">#${tag}</a>`);
+
+function liveRowHTML(lives) {
+  if (!lives.length) return '';
+  return `<nav class="live-row" aria-label="${esc(t('liveNow'))}">${lives.map((l) => `<a class="live-chip" href="#/live/${l.id}"><span class="live-ring"><img class="av" src="${avatarOf(l.host)}" alt=""></span><b class="live-tag">${esc(t('liveNow'))}</b><span class="live-name">${esc(l.host?.name || '')}</span></a>`).join('')}</nav>`;
+}
 
 export async function render(el, params, ctx) {
   const mode = params.name;
@@ -29,6 +35,9 @@ export async function render(el, params, ctx) {
     videos = Array.isArray(raw) ? raw : (raw.videos || []);
   }
 
+  // صف «مباشر» أعلى الرئيسية: من يبث الآن (المتابَعون أولاً)
+  const rtc = mode !== 'watch' ? await rtcConfig() : { enabled: false };
+  const lives = rtc.enabled ? ((await rq('GET', '/live').catch(() => null))?.lives || []) : [];
   const top = mode === 'watch'
     ? `<div class="feed-top"><button class="icon-btn glass" data-act="back" aria-label="${esc(t('back'))}">${icon('back', { size: 22, cls: 'flip-rtl' })}</button><span></span><span></span></div>`
     : `<div class="feed-top">
@@ -37,8 +46,8 @@ export async function render(el, params, ctx) {
           <a href="#/following" class="${mode === 'following' ? 'on' : ''}" ${mode === 'following' ? 'aria-current="page"' : ''}>${esc(t('following'))}</a>
           <a href="#/feed" class="${mode === 'feed' ? 'on' : ''}" ${mode === 'feed' ? 'aria-current="page"' : ''}>${esc(t('forYou'))}</a>
         </nav>
-        <div class="feed-tools"><a class="icon-btn glass" href="#/discover" aria-label="${esc(t('search'))}">${icon('search', { size: 20 })}</a>${prefsButtons()}</div>
-      </div>`;
+        <div class="feed-tools">${ctx.me && rtc.enabled ? `<a class="live-go glass" href="#/golive" aria-label="${esc(t('goLive'))}">${icon('live', { size: 16 })}<span>${esc(t('goLive'))}</span></a>` : ''}<a class="icon-btn glass" href="#/discover" aria-label="${esc(t('search'))}">${icon('search', { size: 20 })}</a>${prefsButtons()}</div>
+      </div>${liveRowHTML(lives)}`;
 
   if (!videos.length) {
     const body = mode === 'watch' ? emptyState(t('notFound'), api.social ? t('privateProfileSub') : '', `<a class="btn primary" href="#/feed">${esc(t('home'))}</a>`)

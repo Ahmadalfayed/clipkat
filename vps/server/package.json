@@ -21,6 +21,7 @@
     "google-auth-library": "^11.3.4",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
+    "livekit-server-sdk": "^2.19.3",
     "multer": "^2.4.0",
     "pg": "^8.13.1"
   }

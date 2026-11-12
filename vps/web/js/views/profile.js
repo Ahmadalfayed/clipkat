@@ -2,6 +2,8 @@ import { api } from '../services/index.js';
 import { t, fmtNum } from '../i18n.js';
 import { icon, esc, $, toast, openSheet, avatarOf, fileToDataURL, storeLogo, emptyState, verifiedBadge } from '../ui.js';
 import { pageHead, videoGrid, openReportSheet, confirmBlock } from './common.js';
+import { callButtons, wireCallButtons } from '../calls.js';
+import { rtcConfig, rq } from '../rtc.js';
 
 export async function render(el, params, ctx) {
   let id = params.args[0];
@@ -32,6 +34,7 @@ export async function render(el, params, ctx) {
               : rel.blockedByMe ? `<button class="btn" id="unblockBtn">${esc(t('unblock'))}</button>`
               : `<button class="btn ${following || rel.requested ? '' : 'primary'}" id="followBtn" aria-pressed="${following}">${esc(following ? t('followingBtn') : rel.requested ? t('requested') : t('follow'))}</button>`}
         ${!own && api.social && ctx.me && !rel.blockedByMe ? `<a class="btn" href="#/chat/${user.id}">${esc(t('message'))}</a>` : ''}
+        <span class="pcall" id="pfCall"></span>
         ${!own && api.social && ctx.me ? `<button class="btn" id="moreBtn" aria-label="${esc(t('more'))}">⋯</button>` : ''}
       </div>
       ${store && storeActive ? `<a class="store-chip" href="#/store/${store.id}"><img src="${storeLogo(store)}" alt=""><span class="grow"><b>${esc(store.name)}${store.verified ? verifiedBadge(t('verified')) : ''}</b><small>${esc(t('visitStore'))}</small></span>${icon('back', { size: 18, cls: 'flip-ltr' })}</a>` : ''}
@@ -45,6 +48,17 @@ export async function render(el, params, ctx) {
     ${locked ? emptyState(rel.blockedByMe ? t('blockedProfile') : t('privateProfile'), rel.blockedByMe ? '' : t('privateProfileSub')) : vids.length ? videoGrid(vids) : emptyState(t('noVideos'), '', own && tab === 'videos' ? `<a class="btn primary" href="#/upload">${esc(t('upload'))}</a>` : '')}
   </div>`;
 
+  // أزرار الاتصال (للمتابعين المتبادلين أو من بينهم محادثة) + شارة «مباشر» إن كان يبث الآن
+  (async () => {
+    const box = $('#pfCall', el); if (!box || !api.social) return;
+    const cfg = await rtcConfig(); if (!cfg.enabled) return;
+    let html = '';
+    const lv = (await rq('GET', '/live').catch(() => null))?.lives?.find((l) => l.userId === user.id);
+    if (lv && !own) html += `<a class="btn live-pill" href="#/live/${lv.id}">${icon('live', { size: 16 })} ${esc(t('liveNow'))}</a>`;
+    if (!own && ctx.me && !rel.blockedByMe) html += await callButtons(user);
+    if (!el.isConnected) return;
+    box.innerHTML = html; wireCallButtons(box, user);
+  })().catch(() => {});
   $('#followBtn', el)?.addEventListener('click', async (e) => {
     if (!(await ctx.requireLogin())) return;
     const b = e.currentTarget; const on = await api.toggleFollow(user.id); const req = !!api.lastFollow?.requested;

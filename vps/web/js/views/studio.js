@@ -183,6 +183,7 @@ export async function render(el, params, ctx) {
           <button class="src-card" id="btnCam" ${canRec ? '' : 'disabled'}>${icon('play', { size: 28 })}<b>${esc(t('recordCam'))}</b><small>${esc(t('recordCamSub'))}</small></button>
           <label class="src-card" id="btnFile">${icon('plus', { size: 28 })}<b>${esc(t('pickVideo'))}</b><small>${esc(t('pickHintStudio'))}</small>
             <input type="file" accept="video/*" class="sr-only"></label>
+          ${!remixSrc && api.social && ctx.me ? `<a class="src-card live-card" href="#/golive">${icon('live', { size: 28 })}<b>${esc(t('goLive'))}</b><small>${esc(t('liveNow'))}</small></a>` : ''}
         </div>
         <a class="btn ghost block" href="#/sounds">${icon('music', { size: 16 })} ${esc(t('soundLibrary'))}</a>
       </div>`;

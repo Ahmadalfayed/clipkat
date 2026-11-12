@@ -1,4 +1,5 @@
 import { api } from '../services/index.js';
+import { startCall } from '../calls.js';
 import { t, timeAgo } from '../i18n.js';
 import { icon, esc, $, avatarOf, logoMark, emptyState } from '../ui.js';
 import { pageHead } from './common.js';
@@ -28,15 +29,18 @@ async function renderNotes(el, ctx) {
     let text;
     if (n.type === 'system') text = n.text === 'welcome' ? t('welcome') : n.text === 'storeReady' ? `${t('myStore')}: ${t('active')}` : n.text;
     else if (n.type === 'remix') text = t(n.text === 'stitch' ? 'n_remix_stitch' : n.text === 'duet' ? 'n_remix_duet' : 'n_remix');
+    else if (n.type === 'live') text = t('n_live');
+    else if (n.type === 'call') text = t(String(n.text || '').endsWith('video') ? 'n_call_missed_video' : 'n_call_missed_audio');
     else text = t('n_' + n.type, { text: n.text || '' });
     return `<li class="notif ${n.read ? '' : 'unread'}">${from ? `<a href="#/profile/${from.id}"><img class="av" src="${avatarOf(from)}" alt=""></a>` : `<span class="av sys">${logoMark(30)}</span>`}
       <div class="grow">${from ? `<b>${esc(from.name)}</b> ` : ''}<span>${esc(text)}</span><div class="muted sm">${esc(timeAgo(n.createdAt))}</div></div>
-      ${v ? `<a href="#/watch/${v.id}"><img class="nthumb" src="${esc(v.poster)}" alt=""></a>` : ''}${n.type === 'system' && n.text === 'storeReady' ? `<a class="btn sm" href="#/dashboard">${esc(t('dashboard'))}</a>` : ''}</li>`;
+      ${v ? `<a href="#/watch/${v.id}"><img class="nthumb" src="${esc(v.poster)}" alt=""></a>` : ''}${n.type === 'system' && n.text === 'storeReady' ? `<a class="btn sm" href="#/dashboard">${esc(t('dashboard'))}</a>` : ''}${n.type === 'live' && n.text ? `<a class="btn sm live-pill" href="#/live/${esc(n.text)}">${esc(t('watchLive'))}</a>` : ''}${n.type === 'call' && from ? `<button class="btn sm" data-callback="${esc(from.id)}" data-kind="${String(n.text || '').endsWith('video') ? 'video' : 'audio'}">${icon('phone', { size: 14 })} ${esc(t('callBack'))}</button>` : ''}</li>`;
   }));
   el.innerHTML = `${reqs.length ? `<h2 class="sec-title">${esc(t('secRequests'))} <span class="pill">${reqs.length}</span></h2><ul class="notifs">${reqs.map((u) => `<li class="notif"><a href="#/profile/${u.id}"><img class="av" src="${avatarOf(u)}" alt=""></a><div class="grow"><b>${esc(u.name)}</b> <span class="muted"><bdi>@${esc(u.username)}</bdi></span></div><button class="btn sm primary" data-acc="${u.id}">${esc(t('accept'))}</button> <button class="btn sm ghost" data-dec="${u.id}">${esc(t('decline'))}</button></li>`).join('')}</ul>` : ''}
     <div class="row-end"><button class="btn sm ghost" id="markAll">${icon('check', { size: 16 })} ${esc(t('markAll'))}</button></div>
     <ul class="notifs">${rows.join('') || emptyState(t('notifications'))}</ul>`;
   el.querySelectorAll('[data-acc],[data-dec]').forEach((b) => b.addEventListener('click', async () => { b.disabled = true; await api.respondFollowRequest(b.dataset.acc || b.dataset.dec, !!b.dataset.acc); ctx.rerender(); }));
+  el.querySelectorAll('[data-callback]').forEach((b) => b.addEventListener('click', async () => { const u = await api.getUser(b.dataset.callback); if (u) startCall(u, b.dataset.kind); }));
   $('#markAll', el)?.addEventListener('click', async () => { await api.markAllRead(); await ctx.refreshMe(); el.querySelectorAll('.unread').forEach((x) => x.classList.remove('unread')); });
 }
 

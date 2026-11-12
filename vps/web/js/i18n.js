@@ -230,6 +230,38 @@ Object.assign(en, {
   privacyPolicy: 'Privacy policy', termsOfUse: 'Terms of use'
 });
 
+// ===== البث المباشر والمكالمات (© 2026 وطن النهار) =====
+Object.assign(ar, {
+  goLive: 'بث مباشر', liveNow: 'مباشر', liveTitlePh: 'عنوان البث (اختياري)', startLive: 'ابدأ البث', endLive: 'إنهاء البث', endLiveQ: 'إنهاء البث المباشر؟',
+  saveLiveClip: 'حفظ آخر ٣ دقائق من البث كمقطع في ملفي', saveLiveNote: 'يُحوَّل ويُنشر تلقائياً خلال دقائق.', liveEnded: 'انتهى البث', liveEndedBy: 'أنهى المشرف هذا البث', liveDropped: 'انقطع اتصال المضيف — انتهى البث',
+  hostReconnecting: 'انقطع اتصال المضيف… بانتظار عودته', reconnecting: 'جارٍ إعادة الاتصال…', viewersN: '{n} مشاهد', liveComment: 'أضف تعليقاً…', send: 'إرسال',
+  deleteComment: 'حذف التعليق', blockViewer: 'حظر هذا المشاهد', blockedViewer: 'تم حظر المشاهد وإخراجه', liveFull: 'البث ممتلئ حالياً', liveOff: 'البث المباشر غير مفعّل على هذا الخادم',
+  liveStartFail: 'تعذّر بدء البث — تحقق من الاتصال وحاول مجدداً', liveJoinFail: 'تعذّر الاتصال بالبث', tapForSound: 'اضغط لتشغيل الصوت', enableCam: 'تشغيل الكاميرا والمايك',
+  camDenied: 'لم يُسمح بالكاميرا أو المايك — فعّلها من إعدادات المتصفح', flipCam: 'تبديل الكاميرا', liveSummary: 'ملخص البث', liveDuration: 'المدة', peakViewers: 'أعلى عدد مشاهدين', hearts: 'القلوب',
+  liveSavedOk: 'حُفظ البث كمقطع في ملفك', liveSaving: 'جارٍ رفع آخر ٣ دقائق…', liveSaveFail: 'تعذّر حفظ البث كمقطع', watchClip: 'شاهد المقطع', resumeLive: 'لديك بث جارٍ — متابعة', liveStartedToast: '{name} بدأ بثاً مباشراً',
+  n_live: 'بدأ بثاً مباشراً', watchLive: 'شاهد', liveConfirmLeave: 'سينتهي البث إذا غادرت الصفحة.', liveAdminEnd: 'إنهاء البث (مشرف)',
+  call: 'اتصال', voiceCall: 'مكالمة صوتية', videoCall: 'مكالمة فيديو', calling: 'جارٍ الاتصال…', ringing: 'يرنّ…', incomingVoice: 'مكالمة صوتية واردة', incomingVideo: 'مكالمة فيديو واردة',
+  acceptCall: 'رد', declineCall: 'رفض', endCall: 'إنهاء', mute: 'كتم', unmute: 'إلغاء الكتم', camOff: 'إيقاف الكاميرا', camOn: 'تشغيل الكاميرا', speaker: 'السماعة',
+  callDeclined: 'رُفضت المكالمة', callNoAnswer: 'لا يوجد رد', callEnded: 'انتهت المكالمة', callBusy: 'المستخدم في مكالمة أخرى', callNotAllowed: 'الاتصال متاح فقط بين المتابعين المتبادلين أو من بينكما محادثة',
+  callBlocked: 'لا يمكن الاتصال بهذا الحساب', callFail: 'تعذّر الاتصال', callConnecting: 'جارٍ الربط…', callOffline: 'الطرف الآخر ليس على الموقع الآن — سيصله إشعار مكالمة فائتة إن لم يرد',
+  slowDown: 'تمهّل قليلاً ثم حاول مجدداً', n_call_missed_audio: 'مكالمة صوتية فائتة', n_call_missed_video: 'مكالمة فيديو فائتة', callBack: 'معاودة الاتصال', micDenied: 'لم يُسمح بالمايك'
+});
+Object.assign(en, {
+  goLive: 'Go live', liveNow: 'LIVE', liveTitlePh: 'Stream title (optional)', startLive: 'Start live', endLive: 'End live', endLiveQ: 'End the live stream?',
+  saveLiveClip: 'Save the last 3 minutes as a clip on my profile', saveLiveNote: 'It is converted and published automatically within minutes.', liveEnded: 'Live ended', liveEndedBy: 'An admin ended this live', liveDropped: 'The host disconnected — live ended',
+  hostReconnecting: 'Host disconnected… waiting for them to return', reconnecting: 'Reconnecting…', viewersN: '{n} watching', liveComment: 'Add a comment…', send: 'Send',
+  deleteComment: 'Delete comment', blockViewer: 'Block this viewer', blockedViewer: 'Viewer blocked and removed', liveFull: 'This live is full right now', liveOff: 'Live is not enabled on this server',
+  liveStartFail: 'Could not start the live — check your connection and retry', liveJoinFail: 'Could not connect to the live', tapForSound: 'Tap to play sound', enableCam: 'Turn on camera & mic',
+  camDenied: 'Camera or microphone was blocked — allow it in browser settings', flipCam: 'Flip camera', liveSummary: 'Live summary', liveDuration: 'Duration', peakViewers: 'Peak viewers', hearts: 'Hearts',
+  liveSavedOk: 'Your live was saved as a clip', liveSaving: 'Uploading the last 3 minutes…', liveSaveFail: 'Could not save the live as a clip', watchClip: 'Watch clip', resumeLive: 'You have a live in progress — resume', liveStartedToast: '{name} started a live',
+  n_live: 'started a live', watchLive: 'Watch', liveConfirmLeave: 'The live will end if you leave.', liveAdminEnd: 'End live (admin)',
+  call: 'Call', voiceCall: 'Voice call', videoCall: 'Video call', calling: 'Calling…', ringing: 'Ringing…', incomingVoice: 'Incoming voice call', incomingVideo: 'Incoming video call',
+  acceptCall: 'Accept', declineCall: 'Decline', endCall: 'End', mute: 'Mute', unmute: 'Unmute', camOff: 'Camera off', camOn: 'Camera on', speaker: 'Speaker',
+  callDeclined: 'Call declined', callNoAnswer: 'No answer', callEnded: 'Call ended', callBusy: 'User is on another call', callNotAllowed: 'Calls are only between mutual followers or people you already chat with',
+  callBlocked: 'You cannot call this account', callFail: 'Call failed', callConnecting: 'Connecting…', callOffline: 'They are not on the site right now — they will see a missed call if they do not answer',
+  slowDown: 'Slow down a little and try again', n_call_missed_audio: 'Missed voice call', n_call_missed_video: 'Missed video call', callBack: 'Call back', micDenied: 'Microphone was blocked'
+});
+
 export let lang = localStorage.getItem('ck:lang') || 'ar';
 export const brandName = () => BRAND[lang];
 

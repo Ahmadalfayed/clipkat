@@ -40,6 +40,12 @@ services:
       TRANSCODE_PRESET: ${TRANSCODE_PRESET:-veryfast}
       TRANSCODE_CRF: ${TRANSCODE_CRF:-23}
       TRANSCODE_THREADS: ${TRANSCODE_THREADS:-2}
+      # البث المباشر والمكالمات (فارغة = الميزتان معطّلتان)
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_URL: http://host.docker.internal:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+    extra_hosts: ["host.docker.internal:host-gateway"]
     volumes:
       - ./data/uploads:/data/uploads
     networks: [internal]
@@ -57,10 +63,24 @@ services:
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}
       ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
       MAX_BODY: ${MAX_BODY:-520MB}
+    extra_hosts: ["host.docker.internal:host-gateway"]   # للوصول إلى LiveKit (شبكة المضيف)
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./data/caddy:/data
     networks: [internal]
+
+  # خادم الوسائط للبث المباشر والمكالمات (SFU + TURN مدمج). شبكة المضيف لتفادي NAT على منافذ UDP.
+  livekit:
+    image: livekit/livekit-server:v1.13.11
+    restart: unless-stopped
+    profiles: ["live"]              # يُشغَّل فقط عند: COMPOSE_PROFILES=live في .env
+    network_mode: host
+    command: ["--config", "/etc/livekit.yaml", "--node-ip", "${LIVEKIT_NODE_IP:-}"]
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-}: ${LIVEKIT_API_SECRET:-}"
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
+      - ./data/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory:/certs:ro
 
 networks:
   internal:

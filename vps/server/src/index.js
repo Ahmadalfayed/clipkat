@@ -12,8 +12,12 @@ import { ensureDirs } from './uploads.js';
 import { hashPassword, HttpError } from './util.js';
 import { startPublisher } from './publisher.js';
 import { startTranscoder } from './transcode.js';
+import { startRtc } from './rtc.js';
 
 if (!config.jwtSecret || config.jwtSecret.length < 32) { console.error('JWT_SECRET missing or too short (>=32 chars). Run install.sh or set it in .env'); process.exit(1); }
+
+// مصادر LiveKit المسموح الاتصال بها من المتصفح (wss للإشارة و https لفحص الاتصال)
+function rtcOrigins() { try { const u = new URL(config.livekitUrl); const host = u.host; return [`wss://${host}`, `https://${host}`, ...(u.protocol === 'ws:' ? [`ws://${host}`, `http://${host}`] : [])]; } catch { return []; } }
 
 const app = express();
 app.disable('x-powered-by');
@@ -25,7 +29,7 @@ app.use(helmet({
     styleSrc: ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/style'],
     imgSrc: ["'self'", 'data:', 'blob:', 'https://www.gstatic.com', 'https://*.googleusercontent.com'],
     mediaSrc: ["'self'", 'blob:'], fontSrc: ["'self'", 'data:'],
-    connectSrc: ["'self'", 'https://accounts.google.com/gsi/'],
+    connectSrc: ["'self'", 'https://accounts.google.com/gsi/', ...rtcOrigins()],
     frameSrc: ['https://accounts.google.com/gsi/'],
     objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'none'"], formAction: ["'self'"]
   } },
@@ -68,6 +72,7 @@ async function main() {
   srv.requestTimeout = config.uploadTimeoutMs; srv.headersTimeout = 65000;
   startPublisher();
   if (config.transcode) startTranscoder(config.transcodePollMs);
+  startRtc();
   const stop = () => { srv.close(() => pool.end().then(() => process.exit(0))); setTimeout(() => process.exit(0), 8000).unref(); };
   process.on('SIGTERM', stop); process.on('SIGINT', stop);
 }

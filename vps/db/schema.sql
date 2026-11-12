@@ -362,3 +362,48 @@ do $$ begin
   alter table videos add constraint videos_media_status_chk check (media_status in ('processing','reprocess','ready','failed'));
 exception when duplicate_object then null; end $$;
 create index if not exists videos_media_queue_idx on videos (created_at) where media_status in ('processing','reprocess');
+
+-- ---------------- البث المباشر والمكالمات (LiveKit) ----------------
+create table if not exists lives (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  title text not null default '' check (char_length(title) <= 120),
+  status text not null default 'live' check (status in ('live','ended')),
+  started_at timestamptz not null default now(),
+  ended_at timestamptz,
+  ended_by uuid references profiles(id) on delete set null,
+  end_reason text,
+  peak_viewers int not null default 0,
+  hearts_count int not null default 0,
+  saved_video_id uuid references videos(id) on delete set null
+);
+create unique index if not exists lives_one_active_uidx on lives (user_id) where status = 'live';
+create index if not exists lives_active_idx on lives (started_at desc) where status = 'live';
+
+create table if not exists live_comments (
+  id uuid primary key default gen_random_uuid(),
+  live_id uuid not null references lives(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  text text not null check (char_length(text) between 1 and 200),
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+create index if not exists live_comments_live_idx on live_comments (live_id, created_at desc);
+
+create table if not exists calls (
+  id uuid primary key default gen_random_uuid(),
+  caller_id uuid not null references profiles(id) on delete cascade,
+  callee_id uuid not null references profiles(id) on delete cascade,
+  kind text not null default 'audio' check (kind in ('audio','video')),
+  status text not null default 'ringing' check (status in ('ringing','active','ended','declined','missed','cancelled')),
+  created_at timestamptz not null default now(),
+  answered_at timestamptz,
+  ended_at timestamptz,
+  check (caller_id <> callee_id)
+);
+create index if not exists calls_callee_idx on calls (callee_id, created_at desc);
+create index if not exists calls_caller_idx on calls (caller_id, created_at desc);
+create index if not exists calls_open_idx on calls (created_at) where status in ('ringing','active');
+
+alter table notifications drop constraint if exists notifications_type_check;
+alter table notifications add constraint notifications_type_check check (type in ('like','comment','follow','system','follow_request','follow_accept','reply','remix','live','call'));

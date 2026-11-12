@@ -29,5 +29,14 @@ export const config = {
   rateAuthMax: num(env.RATE_AUTH_MAX, 20),
   rateApiMax: num(env.RATE_API_MAX, 600),
   sessionDays: 30,
-  googleClientId: (env.GOOGLE_CLIENT_ID || '').trim()
+  googleClientId: (env.GOOGLE_CLIENT_ID || '').trim(),
+  // البث المباشر والمكالمات (LiveKit) — تُعطَّل الميزتان تلقائياً إن لم تُضبط المفاتيح
+  livekitUrl: (env.LIVEKIT_URL || '').trim(),                 // العنوان العام للمتصفح: wss://live.example.com
+  livekitApiUrl: (env.LIVEKIT_API_URL || env.LIVEKIT_URL || '').trim().replace(/^ws/, 'http'),   // داخلي للخادم
+  livekitKey: (env.LIVEKIT_API_KEY || '').trim(),
+  livekitSecret: (env.LIVEKIT_API_SECRET || '').trim(),
+  liveMaxViewers: num(env.LIVE_MAX_VIEWERS, 200),
+  callRingSec: num(env.CALL_RING_SEC, 35),
+  liveHostGraceSec: num(env.LIVE_HOST_GRACE_SEC, 45),
+  rtcReapMs: num(env.RTC_REAP_MS, 10000)
 };

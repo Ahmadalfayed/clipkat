@@ -2,6 +2,7 @@ import { api } from './services/index.js';
 import { t, setLang, lang, brandName } from './i18n.js';
 import { BRAND } from './config.js';
 import { icon, logoMark, toast, $, esc } from './ui.js';
+import { initRealtime } from './calls.js';
 
 const routes = {
   feed: () => import('./views/feed.js'), following: () => import('./views/feed.js'), watch: () => import('./views/feed.js'),
@@ -11,9 +12,10 @@ const routes = {
   chat: () => import('./views/chat.js'), drafts: () => import('./views/drafts.js'),
   profile: () => import('./views/profile.js'), me: () => import('./views/profile.js'), login: () => import('./views/auth.js'),
   stores: () => import('./views/stores.js'), store: () => import('./views/stores.js'), rent: () => import('./views/stores.js'),
+  golive: () => import('./views/live.js'), live: () => import('./views/live.js'),
   checkout: () => import('./views/checkout.js'), dashboard: () => import('./views/dashboard.js'), admin: () => import('./views/admin.js'), settings: () => import('./views/settings.js'), policy: () => import('./views/policy.js')
 };
-const IMMERSIVE = new Set(['feed', 'following', 'watch']);
+const IMMERSIVE = new Set(['feed', 'following', 'watch', 'golive', 'live']);
 const NAV = [['feed', 'home', 'home'], ['stores', 'store', 'stores'], ['upload', 'plus', 'create'], ['inbox', 'inbox', 'inbox'], ['me', 'user', 'me']];
 
 let cleanup = null, renderId = 0;
@@ -78,6 +80,7 @@ async function route() {
   const view = $('#view'); view.innerHTML = '<div class="loading" aria-busy="true"><span class="spinner"></span></div>'; view.scrollTop = 0; window.scrollTo(0, 0);
   ctx.me = await api.currentUser();
   await renderNav(); renderDemoNotice();
+  initRealtime(ctx).catch((e) => console.warn('[rtc]', e));
   if (!loader) { view.innerHTML = `<div class="page"><p class="empty">${esc(t('notFound'))}</p></div>`; renderLegalFoot(view, false); return; }
   const mod = await loader();
   if (id !== renderId) return;
@@ -86,6 +89,7 @@ async function route() {
   cleanup = (await mod.render(el, params, ctx)) || null;
   el.querySelector('h1')?.setAttribute('tabindex', '-1');
   renderLegalFoot(view, IMMERSIVE.has(name) || name === 'login');
+  app.classList.toggle('live-mode', name === 'golive' || name === 'live');
 }
 
 document.addEventListener('click', (e) => {

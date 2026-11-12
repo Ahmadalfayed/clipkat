@@ -3,6 +3,7 @@ import { api } from '../services/index.js';
 import { t, timeAgo } from '../i18n.js';
 import { icon, esc, $, toast, avatarOf, emptyState } from '../ui.js';
 import { pageHead, openReportSheet } from './common.js';
+import { callButtons, wireCallButtons } from '../calls.js';
 
 export async function render(el, params, ctx) {
   if (!(await ctx.requireLogin())) return;
@@ -29,7 +30,7 @@ export async function render(el, params, ctx) {
     await api.readConversation(conv.id);
   };
 
-  el.innerHTML = `<div class="page chat-page">${pageHead(other.name, { extra: `<a class="icon-btn" href="#/profile/${other.id}" aria-label="@${esc(other.username)}"><img class="av sm" src="${avatarOf(other)}" alt=""></a>` })}
+  el.innerHTML = `<div class="page chat-page">${pageHead(other.name, { extra: `<span class="chat-call" id="chatCall"></span><a class="icon-btn" href="#/profile/${other.id}" aria-label="@${esc(other.username)}"><img class="av sm" src="${avatarOf(other)}" alt=""></a>` })}
     <ul class="msgs" id="msgs"></ul>
     <form class="chat-form" id="cf">
       <button type="button" class="icon-btn" id="shareClip" aria-label="${esc(t('shareClip'))}">${icon('play', { size: 20 })}</button>
@@ -38,6 +39,7 @@ export async function render(el, params, ctx) {
     </form>
   </div>`;
   await drawMsgs(true);
+  callButtons(other).then((html) => { const b = $('#chatCall', el); if (b && el.isConnected) { b.innerHTML = html; wireCallButtons(b, other); } }).catch(() => {});
 
   const send = async (body) => {
     if (sending) return; sending = true;
