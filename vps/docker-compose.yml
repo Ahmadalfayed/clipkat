@@ -58,9 +58,25 @@ services:
       MYFATOORAH_API_KEY: ${MYFATOORAH_API_KEY:-}
       MYFATOORAH_BASE_URL: ${MYFATOORAH_BASE_URL:-}
       TAP_SECRET_KEY: ${TAP_SECRET_KEY:-}
+      # البريد (استعادة كلمة المرور): MAIL_DIRECT=1 إرسال مباشر موقّع DKIM، أو SMTP_HOST لخادم خارجي
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-كليب كات}
+      MAIL_DIRECT: ${MAIL_DIRECT:-0}
+      MAIL_HELO: ${MAIL_HELO:-}
+      DKIM_DOMAIN: ${DKIM_DOMAIN:-}
+      DKIM_SELECTOR: ${DKIM_SELECTOR:-}
+      DKIM_KEY_FILE: ${DKIM_KEY_FILE:-/run/dkim/private.pem}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_SECURE: ${SMTP_SECURE:-0}
+      RESET_RATE_IP_MAX: ${RESET_RATE_IP_MAX:-5}
+      RESET_RATE_EMAIL_MAX: ${RESET_RATE_EMAIL_MAX:-3}
     extra_hosts: ["host.docker.internal:host-gateway"]
     volumes:
       - ./data/uploads:/data/uploads
+      - ./data/dkim:/run/dkim:ro      # مفتاح DKIM الخاص (لا يُرفع إلى Git)
     networks: [internal]
     expose: ["3000"]
 

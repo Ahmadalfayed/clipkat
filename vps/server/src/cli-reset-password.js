@@ -1,4 +1,4 @@
-// تغيير كلمة مرور أي حساب من سطر الأوامر (لا يوجد استرجاع بالبريد في هذه النسخة):
+// تغيير كلمة مرور أي حساب من سطر الأوامر (للمشرف — المستخدم يقدر يستعيدها بنفسه من «نسيت كلمة السر؟»):
 //   docker compose exec app node server/src/cli-reset-password.js user@example.com 'كلمة-جديدة-قوية'
 import { pool } from './db.js';
 import { hashPassword } from './util.js';

@@ -175,6 +175,9 @@ export class ApiAdapter {
   async getProfileFresh(id) { this.profiles.delete(id); return this._profile(id, true); }
   async getSettings() { return this._req('GET', '/me/settings'); }
   async updateSettings(patch) { return this._req('PATCH', '/me/settings', patch); }
+  async forgotPassword(email) { return this._req('POST', '/auth/forgot', { email }); }
+  async checkResetToken(token) { return (await this._req('POST', '/auth/reset/check', { token })).valid; }
+  async resetPassword(token, password, confirm) { const r = await this._req('POST', '/auth/reset', { token, password, confirm }); this._me = null; return r; }
   async changePassword(current, next) { return this._req('POST', '/auth/password', { current, next }); }
   async logoutAll() { try { await this._req('POST', '/auth/logout-all', {}); } finally { this._me = null; this._mine = null; } }
   async listFollowRequests() { const rows = await this._req('GET', '/me/follow-requests'); for (const p of rows) this.profiles.set(p.id, p); return rows; }

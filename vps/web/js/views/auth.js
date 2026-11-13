@@ -35,6 +35,7 @@ export async function render(el, params, ctx) {
         ${cloud ? `<label class="field"><span>${esc(t('email'))}</span><input name="email" type="email" required autocomplete="email" dir="ltr"></label>` : ''}
         ${!cloud || mode === 'signup' ? `<label class="field"><span>${esc(t('username'))}</span><input name="username" required autocomplete="username" dir="ltr" pattern="[a-z0-9._]{3,24}" placeholder="a-z 0-9 . _"></label>` : ''}
         <label class="field"><span>${esc(t('password'))}</span><input name="password" type="password" required minlength="${cloud ? 8 : 6}" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" dir="ltr"></label>
+        ${cloud && mode === 'login' ? `<p class="forgot-row"><a href="#/forgot" class="forgot-link" id="forgotLink">${esc(t('forgotPw'))}</a></p>` : ''}
         <p class="form-err" role="alert"></p>
         <button class="btn primary block lg" type="submit">${esc(mode === 'login' ? t('login') : t('signup'))}</button>
       </form>
@@ -49,6 +50,7 @@ export async function render(el, params, ctx) {
         <button class="btn ghost block" data-demo="admin">${icon('shield', { size: 16 })} ${esc(t('demoAdmin'))}</button>
         <p class="muted sm center">demo1234</p>
       </div>`}</div>`;
+    el.querySelector('#forgotLink')?.addEventListener('click', (e) => { const em = String(el.querySelector('input[name=email]')?.value || '').trim(); if (em) { e.preventDefault(); sessionStorage.setItem('ck:forgotEmail', em); ctx.navigate('#/forgot'); } });
     el.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => { mode = b.dataset.m; draw(); }));
     el.querySelectorAll('[data-demo]').forEach((b) => b.addEventListener('click', async () => { await api.login(b.dataset.demo, 'demo1234'); done(); }));
     $('#authForm', el).addEventListener('submit', async (e) => {

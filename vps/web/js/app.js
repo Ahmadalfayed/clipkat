@@ -10,7 +10,7 @@ const routes = {
   upload: () => import('./views/studio.js'), inbox: () => import('./views/inbox.js'),
   sound: () => import('./views/sound.js'), sounds: () => import('./views/sound.js'),
   chat: () => import('./views/chat.js'), drafts: () => import('./views/drafts.js'),
-  profile: () => import('./views/profile.js'), me: () => import('./views/profile.js'), login: () => import('./views/auth.js'),
+  profile: () => import('./views/profile.js'), me: () => import('./views/profile.js'), login: () => import('./views/auth.js'), forgot: () => import('./views/reset.js'), reset: () => import('./views/reset.js'),
   stores: () => import('./views/stores.js'), store: () => import('./views/stores.js'), rent: () => import('./views/stores.js'),
   golive: () => import('./views/live.js'), live: () => import('./views/live.js'),
   coins: () => import('./views/wallet.js'), earnings: () => import('./views/wallet.js'),
@@ -89,7 +89,7 @@ async function route() {
   view.innerHTML = ''; view.append(el);
   cleanup = (await mod.render(el, params, ctx)) || null;
   el.querySelector('h1')?.setAttribute('tabindex', '-1');
-  renderLegalFoot(view, IMMERSIVE.has(name) || name === 'login');
+  renderLegalFoot(view, IMMERSIVE.has(name) || name === 'login' || name === 'forgot' || name === 'reset');
   app.classList.toggle('live-mode', name === 'golive' || name === 'live');
 }
 

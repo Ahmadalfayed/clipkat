@@ -21,6 +21,7 @@ import { buildRtcRouter } from './rtc.js';
 import { buildGiftsRouter } from './gifts.js';
 import { buildPlusRouter } from './plus.js';
 import { buildDownloadsRouter } from './downloads.js';
+import { buildPasswordResetRouter } from './password-reset.js';
 import { verifyGoogleIdToken, baseUsernameFromGoogle, uniqueUsername, unusablePasswordHash } from './google.js';
 
 export const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -104,6 +105,7 @@ export function buildRouter() {
     setSession(res, row);
     res.json({ user: await profileById(row.id) });
   }));
+  r.use(buildPasswordResetRouter());   // «نسيت كلمة السر؟» — استعادة بالبريد
   r.post('/auth/logout', (_req, res) => { clearSession(res); res.json({ ok: true }); });
   r.get('/auth/me', h(async (req, res) => res.json({ user: req.user ? await profileById(req.user.id) : null })));
   r.post('/auth/password', requireUser, authLimit, h(async (req, res) => {

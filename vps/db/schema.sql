@@ -570,3 +570,17 @@ create index if not exists video_downloads_user_idx on video_downloads (user_id,
 -- نوع حركة جديد في سجل العملات: دفع اشتراك بلس بالعملات (قيد واحد قابل لإعادة التطبيق)
 alter table coin_ledger drop constraint if exists coin_ledger_kind_check;
 alter table coin_ledger add constraint coin_ledger_kind_check check (kind in ('purchase','grant','gift_sent','gift_received','payout_hold','payout_refund','subscription'));
+
+-- استعادة كلمة المرور بالبريد: رمز عشوائي يُخزَّن مُجزّأً (sha256) فقط، صالح 30 دقيقة، لمرة واحدة.
+-- kind='google' = رسالة «سجّل الدخول بـ Google» لحساب بلا كلمة مرور (بدون رمز) — تُحسب ضمن حد الطلبات لكل بريد.
+create table if not exists password_resets (
+  id bigserial primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  kind text not null default 'reset' check (kind in ('reset','google')),
+  token_hash text unique check (token_hash is null or char_length(token_hash) = 64),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  check (kind = 'google' or token_hash is not null)
+);
+create index if not exists password_resets_user_idx on password_resets (user_id, created_at desc);

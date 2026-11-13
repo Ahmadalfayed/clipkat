@@ -776,3 +776,18 @@ html.in-call body { overflow: hidden; }
 .plus-bal .linkbtn { margin-inline-start: auto; font-weight: 800; }
 .plus-state { margin: 0; display: flex; gap: 6px; align-items: center; font-weight: 800; color: var(--ok); }
 #plusState.plus-on { color: var(--ok); }
+
+/* ===== نسيت كلمة السر (© 2026 وطن النهار) ===== */
+.forgot-row { margin: -4px 0 0; text-align: end; }
+.forgot-link { font-size: 13px; font-weight: 700; color: var(--primary); text-decoration: none; }
+.forgot-link:hover, .forgot-link:focus-visible { text-decoration: underline; }
+.reset-intro { margin: 0 0 4px; font-size: 14px; line-height: 1.7; }
+.reset-alt { text-align: center; margin: 12px 0 0; font-size: 14px; }
+.reset-alt a { color: var(--primary); font-weight: 700; text-decoration: none; }
+.reset-alt .linkbtn { font-size: 14px; opacity: .85; }
+.reset-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px 18px; margin: 8px 0 16px; text-align: center; box-shadow: var(--shadow); }
+.reset-card h2 { margin: 6px 0 8px; font-size: 18px; }
+.reset-card p { margin: 0 0 8px; line-height: 1.8; }
+.reset-card .reset-ico { display: inline-grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--primary); }
+.reset-card.warn-card .reset-ico { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
+.check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; width: fit-content; }
