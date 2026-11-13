@@ -817,3 +817,14 @@ html.in-call body { overflow: hidden; }
 .bg-unsupported { margin: 8px 0 0; text-align: center; }
 .cam-wrap.has-bg-picker { max-height: 48dvh; }   /* يبقى زر التسجيل ظاهراً مع شريط الخلفيات */
 .studio .bg-picker + .studio-bar { margin-top: 4px; }
+
+/* رابط دفع الإيجار اليدوي */
+.pay-card { margin: 14px 0; border: 2px solid var(--primary); }
+.pay-card.waiting { border-style: dashed; border-color: var(--line); }
+.pay-card h2 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; }
+.pay-amount { font-size: 26px; font-weight: 800; margin: 4px 0 10px; }
+.pay-note { background: var(--surface2); padding: 8px 10px; border-radius: 10px; margin: 0 0 10px; white-space: pre-wrap; }
+.pay-card .btn.lg { margin: 4px 0 8px; }
+form.paylink { margin-top: 10px; padding: 10px; background: var(--surface2); border-radius: 12px; display: grid; gap: 6px; min-width: 220px; text-align: start; }
+form.paylink .field { margin: 0; }
+.paylink-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

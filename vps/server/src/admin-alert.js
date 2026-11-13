@@ -69,3 +69,33 @@ export function alertNewRental({ storeId, storeName, ownerId, username, planId, 
     } catch (e) { console.warn(`[mail] admin alert failed to ${maskEmail(to)}:`, e.responseCode || '', String(e.message || e).slice(0, 200)); }
   });
 }
+
+// ===== رابط دفع الإيجار: بريد لصاحب المتجر (عربي، DKIM، في الخلفية، بدون أي أثر على الطلب) =====
+export const PAYLINK_TEXT = 'رابط دفع إيجار متجرك جاهز';
+export function payLinkEmail({ name, username, storeName, planId, amount }) {
+  const link = `${siteUrl()}/#/dashboard`;
+  const amt = `${Number(amount).toFixed(3)} د.ك`;
+  const subject = `رابط دفع إيجار متجرك جاهز — ${storeName}`;
+  const text = `مرحباً ${name || username}،\n\nرابط دفع إيجار متجرك «${storeName}» في كليب كات جاهز.\nالخطة: ${PLAN_AR[planId] || planId}\nالمبلغ: ${amt}\n\nافتح لوحة متجرك واضغط «ادفع الإيجار»:\n${link}\n\nبعد الدفع سيتم تفعيل متجرك من الإدارة.\n\nكليب كات`;
+  const html = layout(subject, `<p>مرحباً ${escHtml(name || username)}،</p><p>رابط دفع إيجار متجرك <b>${escHtml(storeName)}</b> في كليب كات جاهز.</p>
+<table role="presentation" cellpadding="6" style="font-size:15px"><tr><td style="color:#555">الخطة:</td><td><b>${escHtml(PLAN_AR[planId] || planId)}</b></td></tr>
+<tr><td style="color:#555">المبلغ:</td><td><b>${escHtml(amt)}</b></td></tr></table>
+${button(link, 'فتح لوحة متجري')}
+<p style="font-size:13px;color:#555">بعد الدفع سيتم تفعيل متجرك من الإدارة. إذا لم يعمل الزر، انسخ هذا الرابط في المتصفح:<br><span dir="ltr" style="word-break:break-all;color:#1d4ed8">${escHtml(link)}</span></p>`);
+  return { subject, text, html };
+}
+const payLinkSent = new Map();
+export function emailPaymentLink({ rentalId, ownerId, storeId, planId, amount }) {
+  setImmediate(async () => {
+    try {
+      const now = Date.now();
+      if (now - (payLinkSent.get(rentalId) || 0) < 5 * 60000) { console.log(`[mail] payment-link email skipped (rate limit) rental=${rentalId}`); return; }
+      const u = (await q('select email, username, name, is_banned from profiles where id = $1', [ownerId])).rows[0];
+      const st = (await q('select name from stores where id = $1', [storeId])).rows[0];
+      if (!u || u.is_banned || !u.email || !st) return;
+      payLinkSent.set(rentalId, now); if (payLinkSent.size > 5000) payLinkSent.clear();
+      const r = await sendMail({ to: u.email, ...payLinkEmail({ name: u.name, username: u.username, storeName: st.name, planId, amount }) });
+      if (r.sent) console.log(`[mail] payment-link email sent (${r.mode}${r.via ? ' via ' + r.via : ''}) to ${maskEmail(u.email)} rental=${rentalId}${r.response ? ' — ' + String(r.response).slice(0, 120) : ''}`);
+    } catch (e) { console.warn(`[mail] payment-link email failed rental=${rentalId}:`, e.responseCode || '', String(e.message || e).slice(0, 200)); }
+  });
+}

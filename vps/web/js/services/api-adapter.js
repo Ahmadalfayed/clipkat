@@ -291,4 +291,6 @@ export class ApiAdapter {
   // تفعيل يدوي من المشرف (إلى أن يُربط Webhook الدفع)
   async activateRental(id) { return this._req('POST', `/admin/rentals/${id}/activate`, {}); }
   async cancelRental(id) { await this._req('POST', `/admin/rentals/${id}/cancel`, {}); }
+  // رابط دفع يدوي للإيجار المعلّق (المشرف فقط) — url فارغ = مسح
+  async setRentalPaymentLink(id, { url, note }) { return this._req('POST', `/admin/rentals/${id}/payment-link`, { url: url || '', note: note || '' }); }
 }

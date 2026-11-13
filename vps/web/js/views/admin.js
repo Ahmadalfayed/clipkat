@@ -4,6 +4,7 @@ import { icon, esc, emptyState } from '../ui.js';
 import { pageHead } from './common.js';
 import { rentalBadge } from './dashboard.js';
 import { toast } from '../ui.js';
+import { normContact, storeErrorMessage } from '../contact-url.js';
 
 export async function render(el, params, ctx) {
   if (!(await ctx.requireLogin())) return;
@@ -39,7 +40,7 @@ export async function render(el, params, ctx) {
       <td data-label="${esc(t('method'))}">${esc(t(r.method))}</td>
       <td data-label="${esc(t('date'))}">${esc(fmtDate(r.paidAt))}</td>
       <td data-label="${esc(t('expires'))}">${r.endAt ? esc(fmtDate(r.endAt)) : '—'}</td>
-      <td data-label="${esc(t('status'))}">${rentalBadge(r)}${r.status === 'pending' && api.activateRental ? ` <button class="btn sm primary" data-activate="${r.id}">${esc(t('activate'))}</button> <button class="btn sm ghost" data-cancel="${r.id}">${esc(t('cancelRental'))}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>
+      <td data-label="${esc(t('status'))}">${rentalBadge(r)}${r.status === 'pending' && api.activateRental ? ` <button class="btn sm primary" data-activate="${r.id}">${esc(t('activate'))}</button> <button class="btn sm ghost" data-cancel="${r.id}">${esc(t('cancelRental'))}</button>${api.setRentalPaymentLink ? payLinkForm(r) : ''}` : ''}</td></tr>`).join('')}</tbody></table></div>
     ${rep ? `<h2 class="sec-title" id="reports">${icon('shield', { size: 18 })} ${esc(t('reports'))}</h2>
     <div class="seg" role="tablist"><a role="tab" href="#/admin?r=open" class="${rstatus === 'open' ? 'on' : ''}">${esc(t('openReports'))}</a><a role="tab" href="#/admin?r=actioned" class="${rstatus === 'actioned' ? 'on' : ''}">${esc(t('closedReports'))}</a><a role="tab" href="#/admin?r=dismissed" class="${rstatus === 'dismissed' ? 'on' : ''}">${esc(t('a_dismiss'))}</a></div>
     ${rep.reports.length ? `<div class="table-wrap stack"><table class="tbl"><thead><tr><th>${esc(t('date'))}</th><th>${esc(t('reportReason'))}</th><th>${esc(t('target'))}</th><th>${esc(t('reporter'))}</th><th>${esc(t('status'))}</th></tr></thead><tbody>
@@ -68,5 +69,23 @@ export async function render(el, params, ctx) {
     b.disabled = true;
     try { await api.activateRental(b.dataset.activate); toast(t('activated'), 'ok'); ctx.rerender(); } catch (e) { console.warn(e); toast(e.message, 'warn'); b.disabled = false; }
   }));
+  // رابط الدفع اليدوي: حفظ/تعديل/مسح + إشعار التاجر
+  el.querySelectorAll('form.paylink').forEach((f) => f.addEventListener('submit', async (e) => {
+    e.preventDefault(); const clear = e.submitter?.dataset.clear === '1'; const fd = new FormData(f); const err = f.querySelector('.form-err'); err.textContent = '';
+    const url = clear ? '' : normContact(fd.get('url'));
+    if (!clear && !url) { err.textContent = t('payLinkBad'); f.querySelector('[name=url]').focus(); return; }
+    f.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    try { await api.setRentalPaymentLink(f.dataset.rental, { url, note: clear ? '' : fd.get('note') }); toast(clear ? t('payLinkCleared') : t('payLinkSaved'), 'ok'); ctx.rerender(); }
+    catch (ex) { err.textContent = ex.field === 'paymentUrl' ? t('payLinkBad') : ex.message === 'notPending' ? t('payNotPending') : storeErrorMessage(ex, t); f.querySelectorAll('button').forEach((b) => { b.disabled = false; }); }
+  }));
   el.querySelectorAll('[data-cancel]').forEach((b) => b.addEventListener('click', async () => { if (!confirm(t('cancelRental') + '?')) return; await api.cancelRental(b.dataset.cancel); ctx.rerender(); }));
+}
+
+function payLinkForm(r) {
+  return `<form class="paylink" data-rental="${esc(r.id)}" novalidate>
+    <label class="field"><span>${esc(t('payLinkLabel'))}</span><input name="url" type="text" inputmode="url" dir="ltr" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="300" value="${esc(r.paymentUrl || '')}" placeholder="${esc(t('payLinkPh'))}"></label>
+    <label class="field"><span>${esc(t('payNoteLabel'))}</span><input name="note" type="text" maxlength="200" value="${esc(r.paymentNote || '')}" placeholder="${esc(t('payNotePh'))}"></label>
+    <p class="form-err" role="alert"></p>
+    <div class="paylink-actions"><button class="btn sm primary" type="submit">${esc(t('paySend'))}</button>${r.paymentUrl ? `<button class="btn sm ghost" type="submit" data-clear="1">${esc(t('payClear'))}</button><small class="muted">${esc(t('paySentAt', { d: fmtDate(r.paymentLinkSentAt) }))}</small>` : ''}</div>
+  </form>`;
 }

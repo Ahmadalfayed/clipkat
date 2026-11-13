@@ -584,3 +584,12 @@ create table if not exists password_resets (
   check (kind = 'google' or token_hash is not null)
 );
 create index if not exists password_resets_user_idx on password_resets (user_id, created_at desc);
+
+-- ===== رابط دفع يدوي لإيجار المتجر (يضعه المشرف، يراه صاحب المتجر فقط) =====
+alter table rentals add column if not exists payment_url text;
+alter table rentals add column if not exists payment_note text;
+alter table rentals add column if not exists payment_link_sent_at timestamptz;
+alter table rentals drop constraint if exists rentals_payment_url_check;
+alter table rentals add constraint rentals_payment_url_check check (payment_url is null or (payment_url ~* '^https?://' and char_length(payment_url) <= 300));
+alter table rentals drop constraint if exists rentals_payment_note_check;
+alter table rentals add constraint rentals_payment_note_check check (payment_note is null or char_length(payment_note) <= 200);

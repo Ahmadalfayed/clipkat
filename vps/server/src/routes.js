@@ -17,7 +17,7 @@ import { publishDue } from './publisher.js';
 import { imageUpload, videoUpload, audioUpload, sniffImage, sniffVideo, place, rm, rid, makePoster, dirs, removeVideoFiles } from './uploads.js';
 import { sniffAudio, probe, extractAudio } from './media.js';
 import { activateRental, cancelRental, slots, notify } from './rentals.js';
-import { alertNewRental } from './admin-alert.js';
+import { alertNewRental, emailPaymentLink, PAYLINK_TEXT } from './admin-alert.js';
 import { buildRtcRouter } from './rtc.js';
 import { buildGiftsRouter } from './gifts.js';
 import { buildPlusRouter } from './plus.js';
@@ -889,6 +889,22 @@ export function buildRouter() {
     });
   }));
   r.post('/admin/rentals/:id/activate', requireAdmin, h(async (req, res) => res.json(mapRental(await activateRental(uid(req.params.id), { ref: 'MANUAL-ADMIN', gateway: 'manual', by: req.user.id })))));
+  // رابط دفع يدوي (بنك/Tap/MyFatoorah/واتساب) — المشرف فقط، للإيجارات المعلّقة فقط. رابط فارغ = مسح الرابط.
+  r.post('/admin/rentals/:id/payment-link', requireAdmin, h(async (req, res) => {
+    const id = uid(req.params.id); const b = req.body || {};
+    const rt = need((await q('select * from rentals where id = $1', [id])).rows[0]);
+    if (rt.status !== 'pending') throw new HttpError(409, 'notPending');
+    let url; try { url = normContact(b.url); } catch (e) { e.field = 'paymentUrl'; throw e; }
+    if (!url) {
+      const row = (await q('update rentals set payment_url = null, payment_note = null, payment_link_sent_at = null where id = $1 returning *', [id])).rows[0];
+      return res.json(mapRental(row));
+    }
+    const note = field('paymentNote', () => str(b.note, 200)) || null;
+    const row = (await q('update rentals set payment_url = $2, payment_note = $3, payment_link_sent_at = now() where id = $1 returning *', [id, url, note])).rows[0];
+    await notify(pool, { userId: rt.owner_id, type: 'system', text: PAYLINK_TEXT });
+    emailPaymentLink({ rentalId: id, ownerId: rt.owner_id, storeId: rt.store_id, planId: rt.plan_id, amount: rt.amount });   // في الخلفية
+    res.json(mapRental(row));
+  }));
   r.post('/admin/rentals/:id/cancel', requireAdmin, h(async (req, res) => { await cancelRental(uid(req.params.id)); res.json({ ok: true }); }));
 
   // ---------------- Payment webhook (هيكل أولي — أكمله لاحقاً) ----------------

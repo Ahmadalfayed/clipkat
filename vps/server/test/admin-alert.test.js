@@ -110,3 +110,56 @@ test('alert failures never break the rental request; inbox shows an admin button
     process.env.ADMIN_ALERT_EMAIL = 'off'; assert.equal(alertEmailTo(), null);
   } finally { process.env = save; }
 });
+
+// ===== رابط دفع الإيجار اليدوي =====
+test('manual payment link: admin only, pending only, normalized, javascript: rejected, owner notified + emailed, owner reads only own', async () => {
+  const admin = await adminClient();
+  const m = await user('paylink_merchant'); const other = await user('paylink_other');
+  const ver = (await m.get('/policy/store-rental')).body.version;
+  const st = await m.post('/stores', { store: { name: 'متجر الدفع' }, planId: 'monthly', acceptPolicy: ver }); assert.equal(st.status, 201);
+  const rid = (await m.get('/rentals')).body[0].id;
+  const link = (c, body) => c.post(`/admin/rentals/${rid}/payment-link`, body);
+  // صلاحيات: التاجر نفسه وغيره لا يستطيعان، والمجهول 401
+  assert.equal((await link(m, { url: 'https://evil.example/pay' })).status, 403);
+  assert.equal((await link(other, { url: 'https://evil.example/pay' })).status, 403);
+  assert.equal((await link(new Client(), { url: 'https://x.com' })).status, 401);
+  // روابط خطرة أو غير مفهومة مرفوضة
+  for (const bad of ['javascript:alert(1)', 'JAVASCRIPT://x.com/%0aalert(1)', 'data:text/html,x', 'not a link']) {
+    const r = await link(admin, { url: bad }); assert.equal(r.status, 400, bad); assert.equal(r.body.field, 'paymentUrl', bad);
+  }
+  assert.equal((await link(admin, { url: 'https://pay.example/x', note: 'ن'.repeat(201) })).body.field, 'paymentNote');
+  // رقم → wa.me
+  const before = mails().length;
+  const ok = await link(admin, { url: '+965 5123 4567', note: 'حوّل المبلغ ثم أرسل الإيصال' });
+  assert.equal(ok.status, 200); assert.equal(ok.body.paymentUrl, 'https://wa.me/96551234567'); assert.equal(ok.body.paymentNote, 'حوّل المبلغ ثم أرسل الإيصال'); assert.ok(ok.body.paymentLinkSentAt > 0);
+  assert.equal(ok.body.status, 'pending');                                   // لا تفعيل تلقائي
+  const n = await waitFor(async () => (await m.get('/notifications')).body.notifications.find((x) => x.text === 'رابط دفع إيجار متجرك جاهز'));
+  assert.ok(n, 'owner notified');
+  const mail = await waitFor(() => mails().slice(before).find((x) => x.to === 'paylink_merchant@test.local'));
+  assert.ok(mail, 'owner emailed'); assert.ok(mail.subject.includes('رابط دفع إيجار متجرك جاهز') && mail.text.includes('9.000') && mail.text.includes('https://clipkat.live/#/dashboard'));
+  assert.ok(!/password|secret|token/i.test(mail.text + mail.html));
+  // التاجر يقرأ رابطه، والآخر لا يرى إيجارات غيره
+  const mine = (await m.get('/rentals')).body.find((x) => x.id === rid); assert.equal(mine.paymentUrl, 'https://wa.me/96551234567');
+  assert.ok(!(await other.get('/rentals')).body.some((x) => x.id === rid));
+  assert.ok(!(await other.get(`/rentals?storeId=${st.body.id}`)).body.some((x) => x.id === rid));
+  // تعديل: رابط بدون https يُكمَّل
+  assert.equal((await link(admin, { url: 'tap.company/pay/abc' })).body.paymentUrl, 'https://tap.company/pay/abc');
+  // مسح
+  const cl = await link(admin, { url: '' }); assert.equal(cl.status, 200); assert.equal(cl.body.paymentUrl, null); assert.equal(cl.body.paymentNote, null);
+  // بعد التفعيل لا يمكن وضع رابط
+  assert.equal((await admin.post(`/admin/rentals/${rid}/activate`)).status, 200);
+  assert.equal((await link(admin, { url: 'https://pay.example' })).status, 409);
+  // قيد قاعدة البيانات: http/https فقط حتى لو تجاوز أحد الكود
+  const db = new pg.Client({ connectionString: DB }); await db.connect();
+  try { await assert.rejects(db.query("update rentals set payment_url = 'javascript:alert(1)' where id = $1", [rid])); } finally { await db.end(); }
+});
+
+test('seller dashboard pay card and admin form are served', async () => {
+  const root = BASE.replace(/\/api$/, '');
+  const dash = await (await fetch(root + '/js/views/dashboard.js')).text();
+  assert.ok(dash.includes('rel="noopener noreferrer"') && dash.includes('target="_blank"') && dash.includes("t('payAfter')") && dash.includes("t('payWaiting')"));
+  const adm = await (await fetch(root + '/js/views/admin.js')).text();
+  assert.ok(adm.includes('form class="paylink"') && adm.includes("t('paySend')") && adm.includes('normContact'));
+  const i18n = await (await fetch(root + '/js/i18n.js')).text();
+  for (const s of ['ادفع الإيجار', 'بعد الدفع سيتم تفعيل متجرك من الإدارة', 'بانتظار رابط الدفع من الإدارة', 'رابط الدفع', 'إرسال للتاجر']) assert.ok(i18n.includes(s), s);
+});

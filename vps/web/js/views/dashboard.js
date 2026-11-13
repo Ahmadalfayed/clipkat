@@ -36,6 +36,7 @@ export async function render(el, params, ctx) {
       </section>
     </div>
     <div class="row-between"><h2 class="sec-title">${icon('bag', { size: 18 })} ${esc(t('productsTitle'))}</h2><button class="btn primary sm" id="addBtn" ${st.active || (st.pending && api.mode !== 'local') ? '' : 'disabled'}>${icon('plus', { size: 16 })} ${esc(t('addProduct'))}</button></div>
+    ${st.pending ? payCard(rentals.find((r) => r.status === 'pending')) : ''}
     ${st.pending ? `<div class="note" id="pendingNote">${icon('shield', { size: 18 })}<span>${esc(t('pendingNote'))}</span></div>` : !st.active ? `<div class="warn">${icon('shield', { size: 18 })}<span>${esc(t('storeInactive'))}</span></div>` : ''}
     <ul class="prod-admin">${products.map((p) => `<li data-id="${p.id}"><img src="${productImg(p)}" alt=""><div class="grow"><b>${esc(p.name)}</b><span class="price">${esc(fmtKWD(p.price))}</span><span class="sm ${p.stock ? 'muted' : 'bad'}">${p.stock ? esc(t('inStock', { n: p.stock })) : esc(t('outOfStock'))}</span></div>
       <button class="icon-btn" data-edit="${p.id}" aria-label="${esc(t('edit'))} ${esc(p.name)}">${icon('edit', { size: 18 })}</button><button class="icon-btn danger" data-del="${p.id}" aria-label="${esc(t('delete'))} ${esc(p.name)}">${icon('trash', { size: 18 })}</button></li>`).join('') || `<li class="muted center pad">${esc(t('noProducts'))}</li>`}</ul>
@@ -98,4 +99,16 @@ export function rentalBadge(r) {
   const label = st === 'active' ? (r.endAt && r.endAt < Date.now() ? t('expired') : t('active')) : t(st === 'pending' ? 'pending' : st);
   const cls = st === 'active' && !(r.endAt && r.endAt < Date.now()) ? 'ok' : st === 'pending' ? 'warn-s' : 'bad';
   return `<span class="status ${cls}"><span class="dot-s"></span>${esc(label)}</span>`;
+}
+
+// بطاقة دفع الإيجار (رابط يدوي من الإدارة) — تظهر فقط والإيجار بانتظار التفعيل
+export function payCard(r) {
+  if (!r) return '';
+  const url = /^https?:\/\//i.test(r.paymentUrl || '') ? r.paymentUrl : '';
+  if (!url) return `<section class="card pay-card waiting" id="payCard"><h2>${icon('shield', { size: 18 })} ${esc(t('payRentTitle'))}</h2><p class="pay-amount">${esc(fmtKWD(r.amount))} <small class="muted">· ${esc(t('plan_' + r.planId))}</small></p><p class="muted"><b>${esc(t('payWaiting'))}</b><br>${esc(t('payWaitingSub'))}</p></section>`;
+  return `<section class="card pay-card" id="payCard"><h2>${icon('shield', { size: 18 })} ${esc(t('payRentTitle'))}</h2>
+    <p class="pay-amount">${esc(fmtKWD(r.amount))} <small class="muted">· ${esc(t('plan_' + r.planId))}</small></p>
+    ${r.paymentNote ? `<p class="pay-note">${esc(r.paymentNote)}</p>` : ''}
+    <a class="btn primary block lg" id="payRentBtn" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(t('payRent'))}</a>
+    <p class="muted sm">${esc(t('payAfter'))}</p></section>`;
 }

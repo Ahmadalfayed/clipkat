@@ -59,7 +59,7 @@ app.use(express.static(config.webDir, { index: 'index.html', maxAge: '5m' }));
 app.use('/api', (_req, _res, next) => next(new HttpError(404, 'notfound')));
 app.use((err, _req, res, _next) => {
   res.locals.errCode = err instanceof HttpError ? err.code : err?.type === 'entity.too.large' ? 'tooLarge' : err?.type === 'entity.parse.failed' ? 'bad' : 'server';
-  if (err instanceof HttpError && /^[a-z]{1,20}$/.test(err.field || '')) res.locals.errField = err.field;
+  if (err instanceof HttpError && /^[a-zA-Z]{1,20}$/.test(err.field || '')) res.locals.errField = err.field;
   if (err instanceof HttpError) return res.status(err.status).json({ error: err.code, ...(err.limit ? { limit: err.limit } : {}), ...(res.locals.errField ? { field: res.locals.errField } : {}) });
   if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'tooLarge' });
   if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'bad' });
