@@ -26,7 +26,7 @@ app.set('trust proxy', 1);       // خلف Caddy
 app.use(helmet({
   contentSecurityPolicy: { useDefaults: false, directives: {
     defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", 'https://accounts.google.com/gsi/client'],
+    scriptSrc: ["'self'", "'wasm-unsafe-eval'", 'https://accounts.google.com/gsi/client'],   // wasm-unsafe-eval: فصل الخلفية (MediaPipe WebAssembly) فقط — لا يسمح بـ eval لجافاسكربت
     styleSrc: ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/style'],
     imgSrc: ["'self'", 'data:', 'blob:', 'https://www.gstatic.com', 'https://*.googleusercontent.com'],
     mediaSrc: ["'self'", 'blob:'], fontSrc: ["'self'", 'data:'],

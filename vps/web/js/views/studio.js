@@ -1,10 +1,11 @@
 // © 2026 وطن النهار — استوديو الإنشاء: تصوير أو اختيار ملف، قص، سرعة، نصوص، فلاتر، صورة غلاف، مزج صوت
 import { api } from '../services/index.js';
-import { t, fmtKWD } from '../i18n.js';
+import { t, fmtKWD, lang } from '../i18n.js';
 import { icon, esc, $, $$, toast, productImg } from '../ui.js';
 import { pageHead } from './common.js';
 import { FILTERS, SPEEDS, recorderSupported, makeRecorder, finishBlob, exportClip, exportDuet, exportStitch, captureFrame, blobToFile } from '../studio-export.js';
 
+import { BG_TEMPLATES, bgSupport, bgThumbUrl, createBgEngine, preloadSegmenter } from '../bg-replace.js';
 import { recLimitSec, recState, recExt, fmtClock, REC_TIMESLICE_MS, REC_VIDEO_BPS, REC_AUDIO_BPS } from '../rec-limits.js';
 const maxRec = () => recLimitSec(api.maxVideoSec);   // حد التصوير بالكاميرا = حد المقطع (3 دقائق)
 const maxClip = () => api.maxVideoSec || 180;   // القص الافتراضي: المقطع كاملاً حتى الحد
@@ -41,12 +42,13 @@ export async function render(el, params, ctx) {
     step: remixType === 'stitch' ? 'stitchTrim' : 'source', file: null, url: null, recUrl: null, stream: null, rec: null, recTimer: null,
     start: 0, end: 0, speed: 1, filter: 'none', texts: [], cover: 0, poster: null,
     volOrig: sound ? 0.2 : 1, volSound: sound ? 1 : 0, volSource: 1, volMe: 1,
-    exported: null, recSec: 0, facing: 'user',
+    exported: null, recSec: 0, facing: 'user', bg: null, bgEngine: null,
     layout: 'lr', sourceSide: 'right', stitchStart: 0, stitchEnd: 5
   };
 
   const cleanupMedia = () => {
     clearInterval(st.recTimer);
+    st.bgEngine?.stop(); st.bgEngine = null;
     try { st.rec?.state !== 'inactive' && st.rec.stop(); } catch {}
     st.stream?.getTracks().forEach((t) => t.stop()); st.stream = null;
     if (st.url) { const u = st.url; setTimeout(() => URL.revokeObjectURL(u), 1500); st.url = null; }
@@ -200,8 +202,13 @@ export async function render(el, params, ctx) {
       const duetCam = remixType === 'duet' && srcUrl;
       el.innerHTML = `<div class="page studio">${pageHead(t('recordCam'))}
         ${duetCam ? `<div class="duet-stage ${st.layout} src-${st.sourceSide}"><video class="duet-src" playsinline muted autoplay loop src="${esc(srcUrl)}"></video><video class="cam" playsinline muted autoplay></video></div>
-          <div class="chips" role="group">${layoutChips()}</div>` : `<div class="cam-wrap"><video class="cam" playsinline muted autoplay></video></div>`}
+          <div class="chips" role="group">${layoutChips()}</div>` : `<div class="cam-wrap${bgSupport().ok ? ' has-bg-picker' : ''}${st.bg ? ' bg-on' : ''}"><video class="cam" playsinline muted autoplay></video><canvas class="bg-canvas" aria-label="${esc(t('bgTitle'))}"></canvas><div class="bg-loading" hidden><span class="spinner"></span><span>${esc(t('bgLoading'))}</span></div></div>`}
         <div class="rec-hud" id="recHud" role="timer" aria-live="off"><span id="recTime">${fmtClock(0)} / ${fmtClock(maxRec())}</span><div class="rec-bar"><i id="recBar"></i></div></div>
+        ${duetCam ? '' : bgSupport().ok ? `<div class="bg-picker"><p class="bg-title">${esc(t('bgTitle'))} <small class="muted">${esc(t('bgHint'))}</small></p>
+          <div class="bg-strip" role="radiogroup" aria-label="${esc(t('bgTitle'))}">
+            <button type="button" class="bg-item${!st.bg ? ' on' : ''}" data-bg="" role="radio" aria-checked="${!st.bg}"><span class="bg-thumb none">${icon('close', { size: 22 })}</span><span class="bg-name">${esc(t('bgNone'))}</span></button>
+            ${BG_TEMPLATES.map((b) => `<button type="button" class="bg-item${st.bg === b.id ? ' on' : ''}" data-bg="${b.id}" role="radio" aria-checked="${st.bg === b.id}"><img class="bg-thumb" src="${bgThumbUrl(b.id)}" alt="" loading="lazy" width="60" height="106"><span class="bg-name">${esc(lang === 'ar' ? b.ar : b.en)}</span></button>`).join('')}
+          </div></div>` : `<p class="muted sm bg-unsupported">${esc(t('bgUnsupported'))}</p>`}
         <div class="studio-bar">
           <button class="btn" id="flip">${esc(t('flipCam'))}</button>
           <button class="btn primary rec-btn" id="rec">${esc(t('startRec'))}</button>
@@ -212,24 +219,49 @@ export async function render(el, params, ctx) {
       bindLayoutChips(el);
       const srcVid = $('.duet-src', el);
       if (srcVid) srcVid.play().catch(() => {});
-      $('#flip', el).addEventListener('click', async () => { st.facing = st.facing === 'user' ? 'environment' : 'user'; await startCamera(preview); });
+      // ---- خلفيات الأماكن الشهيرة (فصل الشخص داخل الجهاز) ----
+      st.bgEngine?.stop(); st.bgEngine = null;   // لوحة جديدة لكل رسم للشاشة
+      const wrap = $('.cam-wrap', el), bgCanvas = $('.bg-canvas', el), bgLoad = $('.bg-loading', el);
+      const markBg = () => {
+        wrap?.classList.toggle('bg-on', !!st.bg);
+        el.querySelectorAll('[data-bg]').forEach((b) => { const on = (b.dataset.bg || null) === st.bg; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+      };
+      const bgFail = (e) => { console.warn('[bg]', e); st.bg = null; st.bgEngine?.stop(); markBg(); toast(t('bgFail'), 'warn'); const p = $('.bg-picker', el); if (p) p.outerHTML = `<p class="muted sm bg-unsupported">${esc(t('bgFail'))}</p>`; };
+      const applyBg = async (id) => {
+        if (st.rec?.state === 'recording') { toast(t('bgLocked'), 'warn'); return; }
+        st.bg = id || null; markBg();
+        if (!st.bg) { st.bgEngine?.setTemplate(null); return; }
+        if (!st.bgEngine) st.bgEngine = createBgEngine({ video: preview, canvas: bgCanvas, onError: bgFail });
+        st.bgEngine.setMirror(st.facing === 'user');
+        bgLoad.hidden = false;
+        try { await st.bgEngine.setTemplate(st.bg); } catch (e) { bgFail(e); } finally { bgLoad.hidden = true; }
+      };
+      el.querySelectorAll('[data-bg]').forEach((b) => b.addEventListener('click', () => applyBg(b.dataset.bg)));
+      if (st.bg && wrap) applyBg(st.bg);
+      else if (wrap && bgSupport().ok) setTimeout(() => preloadSegmenter().catch(() => {}), 1500);   // تحميل مسبق هادئ
+      $('#flip', el).addEventListener('click', async () => { st.facing = st.facing === 'user' ? 'environment' : 'user'; await startCamera(preview); st.bgEngine?.setMirror(st.facing === 'user'); });
       $('#rec', el).addEventListener('click', async () => {
         const btn = $('#rec', el);
         if (st.rec && st.rec.state === 'recording') { st.rec.stop(); return; }
         if (!st.stream?.active) { if (!(await acquireCamera())) return; await attachCamera($('.cam', el)); }
         const chunks = [];
-        try { st.rec = makeRecorder(st.stream, { videoBitsPerSecond: REC_VIDEO_BPS, audioBitsPerSecond: REC_AUDIO_BPS }); }
+        // مع خلفية: نسجّل لوحة الدمج + صوت المايك؛ بدونها: الكاميرا كما هي
+        let recStream = st.stream;
+        if (st.bg && st.bgEngine) { const vt = st.bgEngine.stream(30).getVideoTracks(); recStream = new MediaStream([...vt, ...st.stream.getAudioTracks()]); st.bgTracks = vt; }
+        try { st.rec = makeRecorder(recStream, { videoBitsPerSecond: REC_VIDEO_BPS, audioBitsPerSecond: REC_AUDIO_BPS }); }
         catch { toast(t('noRecorderHint'), 'warn'); return; }
         st.rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
         st.rec.onstop = async () => {
           clearInterval(st.recTimer); st.recTimer = null;
           const blob = finishBlob(chunks, st.rec);   // MP4 على سفاري/آيفون، WebM على كروم
           st.stream?.getTracks().forEach((t) => t.stop()); st.stream = null;
+          st.bgTracks?.forEach((t) => t.stop()); st.bgTracks = null; st.bgEngine?.stop(); st.bgEngine = null;
           if (!blob.size) { toast(t('recEmpty'), 'warn'); st.step = 'source'; await draw(); return; }
           await useFile(new File([blob], `rec-${Date.now()}.${recExt(blob.type)}`, { type: blob.type }), { durHint: st.recSec });
         };
         const limit = maxRec(), startedAt = Date.now();
         st.rec.start(REC_TIMESLICE_MS); st.recSec = 0; btn.textContent = t('stopRec'); btn.classList.add('recording');
+        el.querySelector('.bg-picker')?.classList.add('locked');
         const hud = $('#recHud', el); hud?.classList.add('on');
         const tick = () => {
           const r = recState(startedAt, Date.now(), limit); st.recSec = Math.floor(r.elapsed);
@@ -277,7 +309,8 @@ export async function render(el, params, ctx) {
       const v = $('video', el);
       const applyLook = () => { v.style.filter = FILTERS[st.filter]?.css || 'none'; v.playbackRate = st.speed; renderTexts(); };
       const renderTexts = () => {
-        $('#textLayer', el).innerHTML = st.texts.map((x, i) => `<span class="tx" style="top:${x.y * 100}%;color:${esc(x.color)};font-size:${x.size * 0.45}px">${esc(x.text)}<button type="button" data-rm="${i}" aria-label="${esc(t('delete'))}">×</button></span>`).join('');
+        const layer = $('#textLayer', el); if (!layer) return;   // محرر الدويتو لا يحوي طبقة نصوص للمعاينة
+        layer.innerHTML = st.texts.map((x, i) => `<span class="tx" style="top:${x.y * 100}%;color:${esc(x.color)};font-size:${x.size * 0.45}px">${esc(x.text)}<button type="button" data-rm="${i}" aria-label="${esc(t('delete'))}">×</button></span>`).join('');
       };
       const syncTrim = () => {
         const max = vDur(v);
@@ -298,7 +331,7 @@ export async function render(el, params, ctx) {
         st.texts.push({ text: text.slice(0, 40), color: $('#txc', el).value, size: Number($('#txs', el).value), x: 0.5, y: Number($('#txp', el).value) });
         $('#tx', el).value = ''; renderTexts();
       });
-      $('#textLayer', el).addEventListener('click', (e) => { const i = e.target.dataset.rm; if (i != null) { st.texts.splice(+i, 1); renderTexts(); } });
+      $('#textLayer', el)?.addEventListener('click', (e) => { const i = e.target.dataset.rm; if (i != null) { st.texts.splice(+i, 1); renderTexts(); } });
       $('#vo', el)?.addEventListener('input', (e) => { st.volOrig = Number(e.target.value); });
       $('#vs', el)?.addEventListener('input', (e) => { st.volSound = Number(e.target.value); });
       $('#vsrc', el)?.addEventListener('input', (e) => { st.volSource = Number(e.target.value); });

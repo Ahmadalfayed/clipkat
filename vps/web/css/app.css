@@ -791,3 +791,26 @@ html.in-call body { overflow: hidden; }
 .reset-card .reset-ico { display: inline-grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--primary); }
 .reset-card.warn-card .reset-ico { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
 .check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; width: fit-content; }
+
+/* ===== خلفيات الأماكن الشهيرة (© 2026 وطن النهار) ===== */
+.cam-wrap .bg-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+.cam-wrap.bg-on .bg-canvas { display: block; }
+.cam-wrap.bg-on .cam { opacity: 0; }   /* الفيديو يبقى يعمل (iOS يوقف فك الإطارات لو display:none) */
+.bg-loading { position: absolute; inset: auto 0 12px; margin: 0 auto; width: fit-content; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,.6); color: #fff; font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 999px; }
+.bg-loading[hidden] { display: none; }
+.bg-loading .spinner { width: 16px; height: 16px; border-width: 2px; }
+.bg-picker { margin: 10px 0 4px; }
+.bg-picker.locked { opacity: .5; pointer-events: none; }
+.bg-title { margin: 0 0 6px; font-size: 14px; font-weight: 800; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.bg-title small { font-weight: 600; font-size: 12px; }
+.bg-strip { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 8px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.bg-strip::-webkit-scrollbar { display: none; }
+.bg-item { flex: 0 0 auto; width: 68px; display: flex; flex-direction: column; align-items: center; gap: 4px; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; scroll-snap-align: start; font: inherit; }
+.bg-thumb { width: 64px; height: 96px; border-radius: 12px; object-fit: cover; border: 2px solid var(--line); background: var(--surface2); display: grid; place-items: center; color: var(--muted); transition: border-color .15s, transform .15s; }
+.bg-item.on .bg-thumb { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent); transform: translateY(-2px); }
+.bg-name { font-size: 11px; font-weight: 700; line-height: 1.3; text-align: center; max-width: 68px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bg-item.on .bg-name { color: var(--primary); }
+.bg-item:focus-visible .bg-thumb { outline: 2px solid var(--primary); outline-offset: 2px; }
+.bg-unsupported { margin: 8px 0 0; text-align: center; }
+.cam-wrap.has-bg-picker { max-height: 48dvh; }   /* يبقى زر التسجيل ظاهراً مع شريط الخلفيات */
+.studio .bg-picker + .studio-bar { margin-top: 4px; }
