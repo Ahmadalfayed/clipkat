@@ -19,6 +19,7 @@ export async function render(el, params, ctx) {
       <img class="sp-logo" src="${storeLogo(s)}" alt=""><div class="grow"><h1>${esc(s.name)} ${s.verified ? verifiedBadge(t('verified')) : ''}</h1><span class="muted sm">${esc(t('cat_' + s.category))}</span></div>
       <a class="btn sm" href="#/store/${s.id}">${esc(t('viewStore'))}</a>
     </section>
+    ${st.pending ? payCard(rentals.find((r) => r.status === 'pending')) : ''}
     <div class="dash-grid">
       <section class="card stat-card">
         <h2>${esc(t('rentalStatus'))}</h2>
@@ -36,7 +37,6 @@ export async function render(el, params, ctx) {
       </section>
     </div>
     <div class="row-between"><h2 class="sec-title">${icon('bag', { size: 18 })} ${esc(t('productsTitle'))}</h2><button class="btn primary sm" id="addBtn" ${st.active || (st.pending && api.mode !== 'local') ? '' : 'disabled'}>${icon('plus', { size: 16 })} ${esc(t('addProduct'))}</button></div>
-    ${st.pending ? payCard(rentals.find((r) => r.status === 'pending')) : ''}
     ${st.pending ? `<div class="note" id="pendingNote">${icon('shield', { size: 18 })}<span>${esc(t('pendingNote'))}</span></div>` : !st.active ? `<div class="warn">${icon('shield', { size: 18 })}<span>${esc(t('storeInactive'))}</span></div>` : ''}
     <ul class="prod-admin">${products.map((p) => `<li data-id="${p.id}"><img src="${productImg(p)}" alt=""><div class="grow"><b>${esc(p.name)}</b><span class="price">${esc(fmtKWD(p.price))}</span><span class="sm ${p.stock ? 'muted' : 'bad'}">${p.stock ? esc(t('inStock', { n: p.stock })) : esc(t('outOfStock'))}</span></div>
       <button class="icon-btn" data-edit="${p.id}" aria-label="${esc(t('edit'))} ${esc(p.name)}">${icon('edit', { size: 18 })}</button><button class="icon-btn danger" data-del="${p.id}" aria-label="${esc(t('delete'))} ${esc(p.name)}">${icon('trash', { size: 18 })}</button></li>`).join('') || `<li class="muted center pad">${esc(t('noProducts'))}</li>`}</ul>
