@@ -131,7 +131,10 @@ export function buildDownloadsRouter(findVideo) {
       else throw new HttpError(402, 'plusRequired');
     }
     const owner = (await q('select username from profiles where id = $1', [v.userId])).rows[0];
-    return { v, own, via, username: owner?.username || 'user' };
+    // v.src رابط تشغيل موقّع؛ للملف الفعلي نقرأ المسار الخام من القاعدة
+    const raw = (await q('select video_url from videos where id = $1', [v.id])).rows[0]?.video_url;
+    if (!raw) throw new HttpError(404, 'notfound');
+    return { v, own, via, username: owner?.username || 'user', file: { id: v.id, src: raw } };
   }
   async function issue(req, a, kind, file) {
     const st = fs.statSync(file);
@@ -148,11 +151,11 @@ export function buildDownloadsRouter(findVideo) {
     const kind = String(req.body?.kind || 'wm');
     const a = await access(req, kind);
     if (kind === 'nowm') {
-      const file = absUrl(a.v.src);
+      const file = absUrl(a.file.src);
       if (!file || !fs.existsSync(file)) throw new HttpError(404, 'notfound');
       return res.json(await issue(req, a, kind, file));
     }
-    const s = wmState(a.v, a.username);
+    const s = wmState(a.file, a.username);
     if (s.status === 'ready') return res.json(await issue(req, a, kind, s.file));
     if (s.status === 'failed') throw new HttpError(500, 'dlFailed');
     res.status(202).json({ status: 'processing', kind });
@@ -160,7 +163,7 @@ export function buildDownloadsRouter(findVideo) {
   // متابعة تجهيز النسخة بالشعار (لا تُحتسب ضمن حدّ طلبات التنزيل)
   r.get('/videos/:id/download/status', requireUser, pollLimit, h(async (req, res) => {
     const a = await access(req, 'wm');
-    const s = wmState(a.v, a.username);
+    const s = wmState(a.file, a.username);
     if (s.status === 'ready') return res.json(await issue(req, a, 'wm', s.file));
     if (s.status === 'failed') throw new HttpError(500, 'dlFailed');
     res.status(202).json({ status: 'processing', kind: 'wm' });

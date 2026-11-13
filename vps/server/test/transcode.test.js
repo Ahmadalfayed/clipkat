@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import pg from 'pg';
+import { rawUrl } from './helpers/media-url.mjs';
 
 const DB = process.env.TEST_DATABASE_URL;
 if (!DB || !/_test(\?|$)/.test(DB)) throw new Error('Set TEST_DATABASE_URL to a database whose name ends with _test');
@@ -92,7 +93,7 @@ async function waitStatus(c, id, want = ['ready', 'failed'], ms = 60000) {
     await new Promise((x) => setTimeout(x, 400));
   }
 }
-const onDisk = (url) => path.join(upl, url.replace(/^\/uploads\/?/, ''));
+const onDisk = (url) => path.join(upl, rawUrl(url).replace(/^\/uploads\/?/, ''));
 
 test('plan(): safe H.264 MP4 is left alone; HEVC, WebM and H.264-in-MOV are converted', async () => {
   const { analyze, plan } = await import('../src/transcode.js');
@@ -165,7 +166,7 @@ test('pending jobs are picked up without a new upload (resume after restart)', a
   const u = await user('txres' + crypto.randomBytes(2).toString('hex'));
   // نرفع MP4 آمناً ثم نستبدل ملفه بـ WebM ونعلّمه «قيد التحويل» مباشرة في القاعدة (كأن الخادم توقف أثناء المهمة)
   const r = await upload(u, SAMPLE); assert.equal(r.body.mediaStatus, 'ready');
-  const webmUrl = r.body.src.replace(/\.mp4$/, '.webm'); fs.copyFileSync(makeWebm('resume.webm'), onDisk(webmUrl)); fs.unlinkSync(onDisk(r.body.src));
+  const webmUrl = rawUrl(r.body.src).replace(/\.mp4$/, '.webm'); fs.copyFileSync(makeWebm('resume.webm'), onDisk(webmUrl)); fs.unlinkSync(onDisk(r.body.src));
   const cl = new pg.Client({ connectionString: DB }); await cl.connect();
   await cl.query("update videos set video_path = $2, video_url = $2, media_status = 'reprocess' where id = $1", [r.body.id, webmUrl]); await cl.end();
   const done = await waitStatus(u, r.body.id, ['ready', 'failed'], 30000);

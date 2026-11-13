@@ -109,11 +109,18 @@ export class ApiAdapter {
   }
   async listFeedPage(opts) { const r = await this.listVideos(opts); return Array.isArray(r) ? { videos: r, cursor: null, hasMore: false } : r; }
   async getVideo(id) {
-    if (!id || !UUID_RE.test(id)) return null; if (this.videos.has(id)) return this.videos.get(id);
+    if (!id || !UUID_RE.test(id)) return null; if (this.videos.has(id)) { const c = this.videos.get(id); await this.videoURL(c); return c; }
     const v = await this._req('GET', '/videos/' + id); return v ? (await this._vids([v]))[0] : null;
   }
   async refreshVideo(id) { const v = await this._req('GET', '/videos/' + id); return v ? this._mapVideo(v) : null; }
-  async videoURL(v) { return v.src; }
+  // روابط التشغيل موقّعة وتنتهي بعد 1–2 ساعة: نجدّدها قبل الانتهاء (أو عند force بعد خطأ تشغيل)
+  async videoURL(v, { force = false } = {}) {
+    const m = /^\/vs\/([^/]+)\//.exec(v?.src || '');
+    if (!m) return v.src;
+    let exp = 0; try { exp = JSON.parse(atob(m[1].replace(/-/g, '+').replace(/_/g, '/'))).e * 1000; } catch {}
+    if (force || exp - Date.now() < 5 * 60000) { try { const fresh = await this._req('GET', '/videos/' + v.id); if (fresh?.src) v.src = fresh.src; } catch {} }
+    return v.src;
+  }
   async createVideo({ file, poster, caption = '', hashtags = [], sound, soundId, saveSound = false, productIds = [], status, scheduledAt, sourceClipId, remixType } = {}) {
     await this._meOrThrow();
     if (file.size > this.maxVideoMb * 1024 * 1024) { const e = new Error('tooLarge'); e.limit = this.maxVideoMb; throw e; }

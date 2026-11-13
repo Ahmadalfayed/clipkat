@@ -9,6 +9,7 @@ import { q, waitForDb, migrate, pool } from './db.js';
 import { buildRouter } from './routes.js';
 import { csrfGuard } from './auth.js';
 import { ensureDirs } from './uploads.js';
+import { servePlayback } from './media-auth.js';
 import { hashPassword, HttpError } from './util.js';
 import { startPublisher } from './publisher.js';
 import { startTranscoder } from './transcode.js';
@@ -40,8 +41,16 @@ app.use(helmet({
 }));
 if (config.corsOrigins.length) app.use(cors({ origin: config.corsOrigins, credentials: true }));
 app.use('/api', express.json({ limit: '100kb' }), csrfGuard, buildRouter());
-// نسخ التنزيل بالشعار لا تُخدم إلا عبر /api/dl/<رمز موقّع>
-app.use('/uploads/.dlcache', (_req, res) => res.status(404).end());
+// /uploads العام: الصور المصغّرة والصور الشخصية والأصوات فقط.
+// ملفات الفيديو (والأصول قبل التحويل) ونسخ التنزيل (.dlcache) لا تُخدم من هنا إطلاقاً — التشغيل عبر /vs/<رابط موقّع> والتنزيل عبر /api/dl/<رمز>.
+// نطبّع المسار أولاً حتى لا تتجاوزه صيغ مثل //videos أو /./videos أو %2e
+app.use('/uploads', (req, res, next) => {
+  let p; try { p = decodeURIComponent(req.path); } catch { return res.status(400).end(); }
+  const first = (path.posix.normalize('/' + p.replace(/\\/g, '/')).split('/').filter(Boolean)[0] || '').toLowerCase();
+  if (first === 'videos' || first.startsWith('.') || first === '_tmp') return res.status(404).type('text/plain').send('not found');
+  next();
+});
+app.get('/vs/:p/:s', servePlayback);
 app.use('/uploads', express.static(config.uploadDir, { index: false, dotfiles: 'deny', maxAge: '7d', setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff') }));
 const legalPage = (file) => (_req, res) => res.sendFile(path.join(config.webDir, file), { maxAge: '5m' });
 app.get(['/privacy', '/privacy.html'], legalPage('privacy.html'));

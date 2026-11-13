@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import pg from 'pg';
+import { rawUrl } from './helpers/media-url.mjs';
 
 const DB = process.env.TEST_DATABASE_URL;
 if (!DB || !/_test(\?|$)/.test(DB)) throw new Error('Set TEST_DATABASE_URL to a database whose name ends with _test');
@@ -175,7 +176,7 @@ test('end + save as clip: last segments are joined, trimmed to the cap, and publ
   let v; for (let i = 0; i < 60; i++) { v = (await host.get(`/videos/${ev.data.videoId}`)).body; if (v?.mediaStatus === 'ready') break; await sleep(500); }
   assert.equal(v.mediaStatus, 'ready'); assert.equal(v.status, 'published'); assert.equal(v.caption, 'حفظ البث');
   assert.ok(v.poster);
-  const file = path.join(upl, v.src.replace('/uploads/', ''));
+  const file = path.join(upl, rawUrl(v.src).replace('/uploads/', ''));
   const pr = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file]));
   const vs = pr.streams.find((s) => s.codec_type === 'video'); const as = pr.streams.find((s) => s.codec_type === 'audio');
   assert.equal(vs.codec_name, 'h264'); assert.equal(as.codec_name, 'aac'); assert.equal(vs.width, 360); assert.equal(vs.height, 640);

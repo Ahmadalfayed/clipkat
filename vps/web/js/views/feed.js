@@ -73,7 +73,17 @@ export async function render(el, params, ctx) {
   const byId = new Map(slides.map((s) => [s.v.id, s]));
 
   const slideEls = () => $$('.slide', feed);
-  async function ensureSrc(sl) { if (!sl) return; const rec = byId.get(sl.dataset.id); if (!rec) return; const vEl = $('video', sl); if (!vEl.dataset.loaded) { vEl.dataset.loaded = '1'; vEl.src = await api.videoURL(rec.v); } }
+  async function ensureSrc(sl) { if (!sl) return; const rec = byId.get(sl.dataset.id); if (!rec) return; const vEl = $('video', sl); if (!vEl.dataset.loaded) {
+    vEl.dataset.loaded = '1'; vEl.src = await api.videoURL(rec.v);
+    // انتهت صلاحية الرابط الموقّع (صفحة مفتوحة طويلاً)؟ نطلب رابطاً جديداً مرة واحدة ونكمل من نفس الموضع
+    vEl.addEventListener('error', async () => {
+      if (vEl.dataset.renewed) return; vEl.dataset.renewed = '1';
+      const at = vEl.currentTime || 0; const wasPlaying = !vEl.paused || sl.classList.contains('active');
+      vEl.src = await api.videoURL(rec.v, { force: true });
+      vEl.addEventListener('loadedmetadata', () => { try { vEl.currentTime = at; } catch {} if (wasPlaying) vEl.play().catch(() => {}); }, { once: true });
+      setTimeout(() => { delete vEl.dataset.renewed; }, 60000);
+    });
+  } }
   async function loadMore() {
     if (!paged || !hasMore || loadingMore) return; loadingMore = true;
     try {
