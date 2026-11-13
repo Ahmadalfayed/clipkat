@@ -6,7 +6,7 @@ import multer from 'multer';
 import { config } from './config.js';
 import { HttpError } from './util.js';
 
-export const dirs = { tmp: path.join(config.uploadDir, '_tmp'), videos: path.join(config.uploadDir, 'videos'), images: path.join(config.uploadDir, 'images'), sounds: path.join(config.uploadDir, 'sounds') };
+export const dirs = { tmp: path.join(config.uploadDir, '_tmp'), videos: path.join(config.uploadDir, 'videos'), images: path.join(config.uploadDir, 'images'), sounds: path.join(config.uploadDir, 'sounds'), dlcache: path.join(config.uploadDir, '.dlcache') };
 export function ensureDirs() { for (const d of Object.values(dirs)) fs.mkdirSync(d, { recursive: true }); }
 
 const storage = multer.diskStorage({ destination: (_r, _f, cb) => cb(null, dirs.tmp), filename: (_r, _f, cb) => cb(null, crypto.randomBytes(16).toString('hex')) });
@@ -56,6 +56,7 @@ export function removeVideoFiles(v) {
     const scan = (dir, match) => { try { for (const f of fs.readdirSync(dir)) if (match(f)) kill(path.join(dir, f)); } catch {} };
     scan(path.join(dirs.videos, v.user_id), (f) => f.startsWith(`${v.id}.`) || f.startsWith(`.${v.id}.`));
     scan(path.join(dirs.images, v.user_id), (f) => f.startsWith(`poster-${v.id}.`) || f.startsWith(`poster-${v.id}-`));
+    scan(dirs.dlcache, (f) => f.startsWith(`${v.id}-`) || f.startsWith(`.${v.id}-`));   // نسخ التنزيل بالشعار
   }
   return removed;
 }

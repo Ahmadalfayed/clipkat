@@ -56,7 +56,7 @@ after(() => { srv?.kill('SIGTERM'); fs.rmSync(upl, { recursive: true, force: tru
 
 test('remix settings default on and are persisted', async () => {
   const a = await user('rs_owner');
-  assert.deepEqual((await a.get('/me/settings')).body, { isPrivate: false, commentPolicy: 'everyone', messagePolicy: 'everyone', allowDuet: true, allowStitch: true });
+  assert.deepEqual((await a.get('/me/settings')).body, { isPrivate: false, commentPolicy: 'everyone', messagePolicy: 'everyone', allowDuet: true, allowStitch: true, allowDownload: true });
   const p = await a.patch('/me/settings', { allowDuet: false, allowStitch: false });
   assert.equal(p.status, 200, JSON.stringify(p.body));
   assert.equal(p.body.allowDuet, false);

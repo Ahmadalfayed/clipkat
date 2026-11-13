@@ -12,11 +12,11 @@ export function videoGrid(videos, { from = '', own = false } = {}) {
     : `<a class="vcell" href="#/watch/${v.id}${from}" aria-label="${esc(v.caption)}">${inner(v)}</a>`).join('')}</div>`;
 }
 // حذف فيديو يملكه المستخدم: رسالة تأكيد عربية ثم الحذف من الخادم. يرجع true عند النجاح.
-export function confirmDialog({ title, text, ok, cancel = t('cancel') }) {
+export function confirmDialog({ title, text, ok, cancel = t('cancel'), okIcon = 'trash', okCls = 'danger' }) {
   return new Promise((resolve) => {
     let done = false; const finish = (v) => { if (done) return; done = true; resolve(v); };
     const body = document.createElement('div'); body.className = 'confirm-box';
-    body.innerHTML = `<p class="confirm-text">${esc(text)}</p><div class="confirm-acts"><button class="btn danger block lg" data-ok>${icon('trash', { size: 18 })} ${esc(ok)}</button><button class="btn ghost block" data-no>${esc(cancel)}</button></div>`;
+    body.innerHTML = `<p class="confirm-text">${esc(text)}</p><div class="confirm-acts"><button class="btn ${okCls} block lg" data-ok>${okIcon ? icon(okIcon, { size: 18 }) : ''} ${esc(ok)}</button><button class="btn ghost block" data-no>${esc(cancel)}</button></div>`;
     const sh = openSheet({ title, body, cls: 'confirm-sheet', onClose: () => finish(false) });
     body.querySelector('[data-ok]').onclick = () => { finish(true); sh.close(); };
     body.querySelector('[data-no]').onclick = () => sh.close();

@@ -1,6 +1,8 @@
 // © 2026 وطن النهار — شاشة الإعدادات والخصوصية (كل خيار هنا محفوظ ومطبّق فعلياً في الخادم)
 import { api } from '../services/index.js';
-import { t } from '../i18n.js';
+import { t, fmtDate } from '../i18n.js';
+import { rq } from '../rtc.js';
+import { openPlusSheet } from '../download.js';
 import { icon, esc, $, toast, avatarOf, emptyState } from '../ui.js';
 import { pageHead, userRow } from './common.js';
 
@@ -21,7 +23,11 @@ export async function render(el, params, ctx) {
         <input type="checkbox" role="switch" id="sDuet" ${st.allowDuet !== false ? 'checked' : ''} aria-label="${esc(t('allowDuet'))}"></label>
       <label class="set-row"><span class="grow"><b>${esc(t('allowStitch'))}</b><small class="muted">${esc(t('allowStitchSub'))}</small></span>
         <input type="checkbox" role="switch" id="sStitch" ${st.allowStitch !== false ? 'checked' : ''} aria-label="${esc(t('allowStitch'))}"></label>
+      <label class="set-row"><span class="grow"><b>${esc(t('allowDownload'))}</b><small class="muted">${esc(t('allowDownloadSub'))}</small></span>
+        <input type="checkbox" role="switch" id="sDownload" ${st.allowDownload !== false ? 'checked' : ''} aria-label="${esc(t('allowDownload'))}"></label>
     </section>
+    <section class="card set-sec" id="plusSec"><h2>${icon('crown', { size: 18 })} ${esc(t('plusName'))}</h2>
+      <div class="set-row"><span class="grow"><b id="plusState">…</b><small class="muted">${esc(t('plusSubTitle'))}</small></span><button class="btn sm primary" id="plusBtn">${esc(t('plusSubscribe'))}</button></div></section>
     <section class="card set-sec"><h2>${icon('user', { size: 18 })} ${esc(t('secRequests'))} ${reqs.length ? `<span class="pill">${reqs.length}</span>` : ''}</h2>
       ${reqs.length ? `<ul class="set-list">${reqs.map((u) => urow(u, `<button class="btn sm primary" data-acc="${u.id}">${esc(t('accept'))}</button><button class="btn sm ghost" data-dec="${u.id}">${esc(t('decline'))}</button>`)).join('')}</ul>` : `<p class="muted">${esc(t('noRequests'))}</p>`}
     </section>
@@ -52,7 +58,7 @@ export async function render(el, params, ctx) {
 
   const save = async (patch, ctl) => {
     ctl.disabled = true;
-    try { const r = await api.updateSettings(patch); $('#sPrivate', el).checked = r.isPrivate; $('#sComments', el).value = r.commentPolicy; if ($('#sMsgs', el)) $('#sMsgs', el).value = r.messagePolicy; if ($('#sDuet', el)) $('#sDuet', el).checked = r.allowDuet !== false; if ($('#sStitch', el)) $('#sStitch', el).checked = r.allowStitch !== false; toast(t('saved_ok'), 'ok'); if (patch.isPrivate === false) ctx.rerender(); }
+    try { const r = await api.updateSettings(patch); $('#sPrivate', el).checked = r.isPrivate; $('#sComments', el).value = r.commentPolicy; if ($('#sMsgs', el)) $('#sMsgs', el).value = r.messagePolicy; if ($('#sDuet', el)) $('#sDuet', el).checked = r.allowDuet !== false; if ($('#sStitch', el)) $('#sStitch', el).checked = r.allowStitch !== false; if ($('#sDownload', el)) $('#sDownload', el).checked = r.allowDownload !== false; toast(t('saved_ok'), 'ok'); if (patch.isPrivate === false) ctx.rerender(); }
     catch (e) { toast(e.message, 'warn'); ctx.rerender(); } finally { ctl.disabled = false; }
   };
   $('#sPrivate', el).addEventListener('change', (e) => save({ isPrivate: e.target.checked }, e.target));
@@ -60,6 +66,18 @@ export async function render(el, params, ctx) {
   $('#sMsgs', el).addEventListener('change', (e) => save({ messagePolicy: e.target.value }, e.target));
   $('#sDuet', el).addEventListener('change', (e) => save({ allowDuet: e.target.checked }, e.target));
   $('#sStitch', el).addEventListener('change', (e) => save({ allowStitch: e.target.checked }, e.target));
+  $('#sDownload', el).addEventListener('change', (e) => save({ allowDownload: e.target.checked }, e.target));
+  // حالة اشتراك كليب كات بلس
+  const plusDraw = async () => {
+    try {
+      const p = await rq('GET', '/plus'); const st = p.status || {};
+      $('#plusState', el).textContent = st.active ? t('plusActiveUntil', { d: fmtDate(st.expiresAt) }) : t('plusNotActive');
+      $('#plusState', el).classList.toggle('plus-on', !!st.active);
+      $('#plusBtn', el).textContent = st.active ? t('plusRenew') : t('plusSubscribe');
+    } catch { $('#plusSec', el).hidden = true; }
+  };
+  plusDraw();
+  $('#plusBtn', el).addEventListener('click', () => openPlusSheet({ onActive: plusDraw }));
   el.querySelectorAll('[data-acc],[data-dec]').forEach((b) => b.addEventListener('click', async () => {
     b.disabled = true; await api.respondFollowRequest(b.dataset.acc || b.dataset.dec, !!b.dataset.acc); ctx.rerender();
   }));

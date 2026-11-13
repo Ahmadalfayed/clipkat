@@ -127,3 +127,34 @@ export async function renderGiftAdmin(box) {
     catch (er) { toast(er.message === 'noUser' ? t('noSuchUser') : t('grantFail'), 'err'); btn.disabled = false; }
   };
 }
+
+// ---------------- إدارة «كليب كات بلس» (© 2026 وطن النهار) ----------------
+export async function renderPlusAdmin(box) {
+  const s = await rq('GET', '/admin/plus'); const T = s.totals;
+  box.innerHTML = `<h2 class="sec-title" id="plusAdmin">👑 ${esc(t('plusAdmin'))}</h2>
+    <div class="kpis">
+      <div class="kpi"><span>${esc(t('plusActiveSubs'))}</span><b>${fmtInt(T.active)}</b></div>
+      <div class="kpi"><span>${esc(t('plusMoneyRev'))}</span><b>${esc(kwd(T.moneyKwd))}</b><small>${T.moneyCount} · ${esc(t('demoMode'))}: ${esc(kwd(T.demoKwd))}</small></div>
+      <div class="kpi"><span>${esc(t('plusCoinsRev'))}</span><b>${coin(16)} ${fmtInt(T.coins)}</b><small>${T.coinsCount}</small></div>
+      <div class="kpi"><span>${esc(t('plusDownloads'))}</span><b>${fmtInt(T.downloadsWm + T.downloadsNowm)}</b><small>${esc(t('dlFree'))}: ${fmtInt(T.downloadsWm)} · ${esc(t('dlNoWm'))}: ${fmtInt(T.downloadsNowm)}</small></div>
+    </div>
+    <div class="dash-grid">
+      <section class="card"><h2>${esc(t('plusActiveSubs'))}</h2>${s.subscribers.length ? `<ul class="led-list">${s.subscribers.map((x) => `<li class="po-row"><img class="av sm" src="${avatarOf(x)}" alt=""><span class="grow"><b>${esc(x.name)} <bdi dir="ltr" class="muted">@${esc(x.username)}</bdi></b><small class="muted">${esc(t('plusActiveUntil', { d: fmtDate(x.expiresAt) }))}</small></span><button class="btn sm ghost" data-revoke="${esc(x.username)}">${esc(t('plusRevoke'))}</button></li>`).join('')}</ul>` : `<p class="muted">${esc(t('plusNoSubs'))}</p>`}</section>
+      <section class="card"><h2>${esc(t('plusGrant'))}</h2>
+        <form class="form" id="plusGrantForm"><label class="field"><span>${esc(t('usernameLabel'))}</span><input name="user" required maxlength="64" dir="ltr" placeholder="@username"></label>
+        <label class="field"><span>${esc(t('plusDays'))}</span><input name="days" type="number" min="1" max="366" step="1" value="${s.price.days}" required dir="ltr"></label>
+        <button class="btn primary" type="submit">👑 ${esc(t('plusGrant'))}</button></form></section>
+    </div>`;
+  box.onclick = async (e) => {
+    const b = e.target.closest('[data-revoke]'); if (!b) return;
+    if (!confirm(t('plusRevokeQ', { u: b.dataset.revoke }))) return;
+    b.disabled = true;
+    try { await rq('POST', '/admin/plus/revoke', { user: b.dataset.revoke }); toast(t('plusRevoked', { u: b.dataset.revoke }), 'ok'); renderPlusAdmin(box); }
+    catch { toast(t('plusFail'), 'err'); b.disabled = false; }
+  };
+  $('#plusGrantForm', box).onsubmit = async (e) => {
+    e.preventDefault(); const f = e.target; const btn = f.querySelector('[type=submit]'); btn.disabled = true;
+    try { const r = await rq('POST', '/admin/plus/grant', { user: f.user.value.trim(), days: Number(f.days.value) }); toast(t('plusGranted', { u: r.user.username }), 'ok'); renderPlusAdmin(box); }
+    catch (er) { toast(er.message === 'notfound' ? t('noSuchUser') : t('plusFail'), 'err'); btn.disabled = false; }
+  };
+}

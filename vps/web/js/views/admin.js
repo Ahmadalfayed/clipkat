@@ -57,6 +57,8 @@ export async function render(el, params, ctx) {
   if (api.mode !== 'local') {
     const gbox = document.createElement('div'); gbox.className = 'gift-admin'; el.querySelector('.dash-grid')?.after(gbox);
     import('./wallet.js').then((m) => m.renderGiftAdmin(gbox)).catch((e) => console.warn('[gifts admin]', e));
+    const pbox = document.createElement('div'); pbox.className = 'plus-admin'; gbox.after(pbox);
+    import('./wallet.js').then((m) => m.renderPlusAdmin(pbox)).catch((e) => console.warn('[plus admin]', e));
   }
   el.querySelectorAll('[data-res]').forEach((b) => b.addEventListener('click', async () => {
     if (b.dataset.action !== 'dismiss' && !confirm(t('a_' + b.dataset.action) + '?')) return;

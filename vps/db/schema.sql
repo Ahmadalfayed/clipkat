@@ -526,3 +526,47 @@ create table if not exists coin_ledger (
   created_at timestamptz not null default now()
 );
 create index if not exists coin_ledger_user_idx on coin_ledger (user_id, created_at desc);
+
+-- =====================================================================
+--  تنزيل الفيديو + اشتراك «كليب كات بلس» (© 2026 وطن النهار)
+--  التنزيل المجاني بشعار كليب كات للجميع (المسجّلين). التنزيل بدون شعار لمشتركي بلس، ولصاحب الفيديو مجاناً.
+-- =====================================================================
+alter table profiles add column if not exists allow_download boolean not null default true;
+alter table videos add column if not exists downloads_count int not null default 0;
+
+create table if not exists plus_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  plan text not null default 'monthly',
+  starts_at timestamptz not null,
+  expires_at timestamptz not null,
+  method text not null check (method in ('money','coins','admin')),
+  provider text not null check (provider in ('demo','myfatoorah','tap','coins','admin')),
+  price numeric(10,3) not null default 0 check (price >= 0),
+  currency text not null default 'KWD',
+  coins int not null default 0 check (coins >= 0),
+  status text not null default 'active' check (status in ('pending','active','revoked','failed')),
+  provider_ref text,
+  idem_key text check (char_length(idem_key) <= 64),
+  granted_by uuid references profiles(id) on delete set null,
+  note text not null default '' check (char_length(note) <= 200),
+  created_at timestamptz not null default now(),
+  check (expires_at > starts_at)
+);
+create unique index if not exists plus_idem_uidx on plus_subscriptions (user_id, idem_key) where idem_key is not null;
+create index if not exists plus_user_idx on plus_subscriptions (user_id, expires_at desc);
+
+create table if not exists video_downloads (
+  id bigserial primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  video_id uuid not null references videos(id) on delete cascade,
+  kind text not null check (kind in ('wm','nowm')),
+  via text not null check (via in ('free','owner','plus')),
+  created_at timestamptz not null default now()
+);
+create index if not exists video_downloads_video_idx on video_downloads (video_id, created_at desc);
+create index if not exists video_downloads_user_idx on video_downloads (user_id, created_at desc);
+
+-- نوع حركة جديد في سجل العملات: دفع اشتراك بلس بالعملات (قيد واحد قابل لإعادة التطبيق)
+alter table coin_ledger drop constraint if exists coin_ledger_kind_check;
+alter table coin_ledger add constraint coin_ledger_kind_check check (kind in ('purchase','grant','gift_sent','gift_received','payout_hold','payout_refund','subscription'));

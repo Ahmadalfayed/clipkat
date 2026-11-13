@@ -5,6 +5,7 @@ import { icon, esc, $, $$, toast, openSheet, avatarOf, productImg, emptyState, v
 import { prefsButtons, brandHTML } from '../app.js';
 import { openReportSheet, confirmBlock, deleteMyVideo } from './common.js';
 import { POLICY } from '../policy-text.js';
+import { downloadButtonsHTML, startDownload } from '../download.js';
 
 let muted = true; // يبدأ صامتاً (سياسة التشغيل التلقائي في المتصفحات)
 
@@ -201,9 +202,11 @@ export async function render(el, params, ctx) {
         ${s.v.canDuet !== false ? `<button class="btn block ghost" data-m="duet">${esc(t('duet'))}</button>` : ''}
         ${s.v.canStitch !== false ? `<button class="btn block ghost" data-m="stitch">${esc(t('stitch'))}</button>` : ''}
         <button class="btn block ghost" data-m="copy">${esc(t('copyLink'))}</button>
-        <button class="btn block ghost" data-m="sys">${esc(t('share'))}</button></div>` });
+        <button class="btn block ghost" data-m="sys">${esc(t('share'))}</button>
+        ${downloadButtonsHTML(s.v, ctx.me?.id === s.v.userId)}</div>` });
       sh.body.addEventListener('click', async (e) => {
         const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return; sh.close();
+        if (m === 'dl-wm' || m === 'dl-nowm') { if (await ctx.requireLogin()) startDownload(s.v, m === 'dl-wm' ? 'wm' : 'nowm', { username: s.user?.username, own: ctx.me?.id === s.v.userId }); return; }
         if (m === 'duet' || m === 'stitch') { if (await ctx.requireLogin()) ctx.navigate(`#/upload?${m}=${s.v.id}`); return; }
         if (m === 'copy') { try { await navigator.clipboard.writeText(url); } catch {} toast(t('linkCopied')); return; }
         if (m === 'sys') {
@@ -235,6 +238,7 @@ export async function render(el, params, ctx) {
       <button class="btn block ghost" data-m="copy">${esc(t('copyLink'))}</button>
       ${s.v.soundId ? `<a class="btn block ghost" href="#/upload?sound=${s.v.soundId}" data-m="use">${esc(t('useSound'))}</a>` : (api.social ? `<button class="btn block ghost" data-m="extract">${esc(t('useSound'))}</button>` : '')}
       ${s.v.remixCount ? `<button class="btn block ghost" data-m="remixes">${esc(t('remixes'))} (${s.v.remixCount})</button>` : ''}
+      ${api.social ? downloadButtonsHTML(s.v, own) : ''}
       ${api.social && own ? `<button class="btn block ghost bad del-video" data-m="delete">${icon('trash', { size: 16 })} ${esc(t('deleteVideo'))}</button>` : ''}
       ${api.social && !own ? `<button class="btn block ghost" data-m="report">${esc(t('reportVideo'))}</button><button class="btn block ghost bad" data-m="block">${esc(t('block'))} <bdi dir="ltr">@${esc(s.user?.username)}</bdi></button>` : ''}</div>` });
     sh.body.addEventListener('click', async (e) => {
@@ -245,6 +249,7 @@ export async function render(el, params, ctx) {
       if (m === 'remixes') { openRemixes(s.v); return; }
       if (m === 'delete') { if (own && await deleteMyVideo(s.v.id)) removeSlide(s.v.id); return; }
       if (!(await ctx.requireLogin())) return;
+      if (m === 'dl-wm' || m === 'dl-nowm') { startDownload(s.v, m === 'dl-wm' ? 'wm' : 'nowm', { username: s.user?.username, own }); return; }
       if (m === 'extract') {
         try { const snd = await api.extractSound(s.v.id, s.v.sound || s.v.caption); ctx.navigate('#/upload?sound=' + snd.id); }
         catch (e) { toast(t(e.message === 'noAudio' ? 'noAudio' : e.message), 'warn'); }

@@ -47,5 +47,10 @@ export const config = {
   paymentProvider: ['demo', 'myfatoorah', 'tap'].includes((env.PAYMENT_PROVIDER || '').trim()) ? env.PAYMENT_PROVIDER.trim() : 'demo',
   demoCoinsDailyMax: num(env.DEMO_COINS_DAILY_MAX, 20000),        // سقف الشحن التجريبي لكل مستخدم يومياً
   giftRateMax: num(env.GIFT_RATE_MAX, 40),                        // أقصى عدد إرسال هدايا لكل مستخدم في 10 ثوانٍ
+  // تنزيل الفيديو واشتراك «كليب كات بلس» (تنزيل بدون شعار)
+  plusMonthlyKwd: num(env.PLUS_MONTHLY_KWD, 0.5),
+  plusMonthlyCoins: num(env.PLUS_MONTHLY_COINS, 170),
+  plusDays: num(env.PLUS_DAYS, 30),
+  downloadRateMax: num(env.DOWNLOAD_RATE_MAX, 30),               // طلبات تنزيل لكل مستخدم في 10 دقائق
   publicUrl: (env.PUBLIC_URL || '').trim().replace(/\/$/, '')
 };

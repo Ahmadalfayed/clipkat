@@ -80,11 +80,11 @@ test('unauthenticated users cannot change data or read private endpoints', async
 
 test('settings persist and are validated', async () => {
   const a = await user('set_alice');
-  assert.deepEqual((await a.get('/me/settings')).body, { isPrivate: false, commentPolicy: 'everyone', messagePolicy: 'everyone', allowDuet: true, allowStitch: true });
+  assert.deepEqual((await a.get('/me/settings')).body, { isPrivate: false, commentPolicy: 'everyone', messagePolicy: 'everyone', allowDuet: true, allowStitch: true, allowDownload: true });
   assert.equal((await a.patch('/me/settings', { commentPolicy: 'hackers' })).status, 400);
   assert.equal((await a.patch('/me/settings', { isPrivate: 'yes' })).status, 400);
-  assert.deepEqual((await a.patch('/me/settings', { isPrivate: true, commentPolicy: 'followers', messagePolicy: 'everyone', allowDuet: true, allowStitch: true })).body, { isPrivate: true, commentPolicy: 'followers', messagePolicy: 'everyone', allowDuet: true, allowStitch: true });
-  assert.deepEqual((await a.get('/me/settings')).body, { isPrivate: true, commentPolicy: 'followers', messagePolicy: 'everyone', allowDuet: true, allowStitch: true });
+  assert.deepEqual((await a.patch('/me/settings', { isPrivate: true, commentPolicy: 'followers', messagePolicy: 'everyone', allowDuet: true, allowStitch: true })).body, { isPrivate: true, commentPolicy: 'followers', messagePolicy: 'everyone', allowDuet: true, allowStitch: true, allowDownload: true });
+  assert.deepEqual((await a.get('/me/settings')).body, { isPrivate: true, commentPolicy: 'followers', messagePolicy: 'everyone', allowDuet: true, allowStitch: true, allowDownload: true });
 });
 
 test('password change requires current password and revokes old sessions', async () => {

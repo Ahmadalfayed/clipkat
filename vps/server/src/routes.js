@@ -19,6 +19,8 @@ import { sniffAudio, probe, extractAudio } from './media.js';
 import { activateRental, cancelRental, slots, notify } from './rentals.js';
 import { buildRtcRouter } from './rtc.js';
 import { buildGiftsRouter } from './gifts.js';
+import { buildPlusRouter } from './plus.js';
+import { buildDownloadsRouter } from './downloads.js';
 import { verifyGoogleIdToken, baseUsernameFromGoogle, uniqueUsername, unusablePasswordHash } from './google.js';
 
 export const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -33,6 +35,9 @@ export function buildRouter() {
   r.use(loadUser);
   r.use(buildRtcRouter());          // البث المباشر والمكالمات
   r.use(buildGiftsRouter());        // العملات وهدايا البث (لا علاقة لها بمبيعات المتاجر)
+  r.use(buildPlusRouter());         // اشتراك «كليب كات بلس» الشهري (تنزيل بدون شعار)
+  // تنزيل المقاطع: نفس قواعد الظهور (خصوصية/حظر/حالة النشر) عبر queryVideos
+  r.use(buildDownloadsRouter((viewer, id) => queryVideos(viewer, ['v.id = $1'], [id], 1).then((x) => x[0] || null)));
 
   r.get('/health', h(async (_q, res) => { await q('select 1'); res.json({ ok: true }); }));
   r.get('/config', (_req, res) => res.json({ maxVideoMb: config.maxVideoMb, maxImageMb: config.maxImageMb, maxSoundMb: config.maxSoundMb, maxSoundSec: config.maxSoundSec, maxVideoSec: config.maxVideoSec, storePolicyVersion: STORE_POLICY_VERSION, googleClientId: config.googleClientId || '' }));
@@ -185,7 +190,7 @@ export function buildRouter() {
   r.delete('/me/followers/:id', requireUser, h(async (req, res) => { await q('delete from follows where follower_id = $1 and followee_id = $2', [uid(req.params.id), req.user.id]); res.json({ ok: true }); }));
 
   // ---------------- Settings ----------------
-  const settingsOf = async (id) => { const r0 = (await q('select is_private, comment_policy, message_policy, allow_duet, allow_stitch from profiles where id = $1', [id])).rows[0]; return { isPrivate: r0.is_private, commentPolicy: r0.comment_policy, messagePolicy: r0.message_policy, allowDuet: !!r0.allow_duet, allowStitch: !!r0.allow_stitch }; };
+  const settingsOf = async (id) => { const r0 = (await q('select is_private, comment_policy, message_policy, allow_duet, allow_stitch, allow_download from profiles where id = $1', [id])).rows[0]; return { isPrivate: r0.is_private, commentPolicy: r0.comment_policy, messagePolicy: r0.message_policy, allowDuet: !!r0.allow_duet, allowStitch: !!r0.allow_stitch, allowDownload: r0.allow_download !== false }; };
   r.get('/me/settings', requireUser, h(async (req, res) => res.json(await settingsOf(req.user.id))));
   r.patch('/me/settings', requireUser, h(async (req, res) => {
     const b = req.body || {};
@@ -194,6 +199,7 @@ export function buildRouter() {
     if (b.messagePolicy !== undefined && !MESSAGE_POLICIES.includes(b.messagePolicy)) throw bad('bad');
     if (b.allowDuet !== undefined && typeof b.allowDuet !== 'boolean') throw bad('bad');
     if (b.allowStitch !== undefined && typeof b.allowStitch !== 'boolean') throw bad('bad');
+    if (b.allowDownload !== undefined && typeof b.allowDownload !== 'boolean') throw bad('bad');
     await tx(async (c) => {
       if (b.isPrivate !== undefined) {
         await c.query('update profiles set is_private = $1 where id = $2', [b.isPrivate, req.user.id]);
@@ -206,6 +212,7 @@ export function buildRouter() {
       if (b.messagePolicy !== undefined) await c.query('update profiles set message_policy = $1 where id = $2', [b.messagePolicy, req.user.id]);
       if (b.allowDuet !== undefined) await c.query('update profiles set allow_duet = $1 where id = $2', [b.allowDuet, req.user.id]);
       if (b.allowStitch !== undefined) await c.query('update profiles set allow_stitch = $1 where id = $2', [b.allowStitch, req.user.id]);
+      if (b.allowDownload !== undefined) await c.query('update profiles set allow_download = $1 where id = $2', [b.allowDownload, req.user.id]);
     });
     res.json(await settingsOf(req.user.id));
   }));

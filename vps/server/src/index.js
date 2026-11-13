@@ -40,6 +40,8 @@ app.use(helmet({
 }));
 if (config.corsOrigins.length) app.use(cors({ origin: config.corsOrigins, credentials: true }));
 app.use('/api', express.json({ limit: '100kb' }), csrfGuard, buildRouter());
+// نسخ التنزيل بالشعار لا تُخدم إلا عبر /api/dl/<رمز موقّع>
+app.use('/uploads/.dlcache', (_req, res) => res.status(404).end());
 app.use('/uploads', express.static(config.uploadDir, { index: false, dotfiles: 'deny', maxAge: '7d', setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff') }));
 const legalPage = (file) => (_req, res) => res.sendFile(path.join(config.webDir, file), { maxAge: '5m' });
 app.get(['/privacy', '/privacy.html'], legalPage('privacy.html'));

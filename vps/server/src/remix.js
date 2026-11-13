@@ -25,7 +25,7 @@ export async function enrichRemix(videos, viewer) {
   const ownerIds = [...new Set(videos.map((v) => v.userId).filter(Boolean))];
   const sourceIds = [...new Set(videos.map((v) => v.sourceClipId).filter(Boolean))];
   const allows = ownerIds.length
-    ? (await q('select id, allow_duet, allow_stitch from profiles where id = any($1::uuid[])', [ownerIds])).rows
+    ? (await q('select id, allow_duet, allow_stitch, allow_download from profiles where id = any($1::uuid[])', [ownerIds])).rows
     : [];
   const allowBy = Object.fromEntries(allows.map((r) => [r.id, r]));
   const sources = sourceIds.length
@@ -50,6 +50,10 @@ export async function enrichRemix(videos, viewer) {
     const a = allowBy[v.userId];
     v.canDuet = !a || a.allow_duet === true;
     v.canStitch = !a || a.allow_stitch === true;
+    v.canDownload = !a || a.allow_download !== false;   // «السماح بتنزيل فيديوهاتي»
+    // عدد مرات التنزيل يراه صاحب المقطع (والمشرف) فقط
+    if (viewer && (viewer.id === v.userId || viewer.is_admin)) v.downloads = v._dl || 0;
+    delete v._dl;
     if (!v.sourceClipId) {
       v.source = v.remixType ? { available: false } : null;
       continue;
