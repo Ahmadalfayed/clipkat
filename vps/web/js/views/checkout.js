@@ -51,13 +51,20 @@ export async function render(el, params, ctx) {
   const err0 = () => $('.form-err', el);
   const pending = {};
   const pick = (id, max, setV, field) => $(id, el)?.addEventListener('change', (e) => {
-    const file = e.target.files[0]; setV(null); err0().textContent = ''; if (!file) return;
-    pending[field] = fileToDataURL(file, max).then(setV).catch(() => { e.target.value = ''; setV(null); err0().textContent = t('storeErr_' + field); throw Object.assign(new Error('bad image'), { field }); });
+    const file = e.target.files[0]; setV(null); err0().textContent = ''; markBad(null); if (!file) return;
+    pending[field] = fileToDataURL(file, max).then(setV).catch(() => { e.target.value = ''; setV(null); err0().textContent = t('storeErr_' + field); markBad(field); throw Object.assign(new Error('bad image'), { field }); });
     pending[field].catch(() => {});
   });
   pick('#logoFile', 256, (v) => { logo = v; }, 'logo');
   pick('#bannerFile', 1000, (v) => { banner = v; }, 'banner');
-  const markBad = (name) => { $$('[aria-invalid]', el).forEach((x) => x.removeAttribute('aria-invalid')); const inp = name && $(`[name=${name}], #${name}File`, el); if (inp) { inp.setAttribute('aria-invalid', 'true'); inp.focus(); } };
+  // نعلّم الحقل الخاطئ ونكتب الرسالة تحته مباشرة (وأيضاً فوق زر الدفع)
+  const markBad = (name) => {
+    $$('[aria-invalid]', el).forEach((x) => x.removeAttribute('aria-invalid')); $$('.field-err', el).forEach((x) => x.remove());
+    const inp = name && $(`[name=${name}], #${name}File`, el); if (!inp) return;
+    inp.setAttribute('aria-invalid', 'true');
+    const m = document.createElement('small'); m.className = 'field-err'; m.setAttribute('role', 'alert'); m.textContent = err0().textContent; inp.closest('.field')?.append(m);
+    inp.focus(); inp.scrollIntoView({ block: 'center' });
+  };
   $$('.cnt', el).forEach((c) => { const inp = $(`[name=${c.dataset.for}]`, el); inp.addEventListener('input', () => { c.textContent = inp.value.length; }); });
   $('#coForm', el).addEventListener('submit', async (e) => {
     e.preventDefault(); const fd = new FormData(e.target); const err = $('.form-err', el); err.textContent = '';
