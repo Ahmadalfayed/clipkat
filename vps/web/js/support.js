@@ -43,7 +43,12 @@ export function mountSupport(ctx) {
   let history = load(); let busy = false;
   const body = $('#supBody', panel);
   const bubble = (m) => `<div class="sup-msg ${m.role === 'user' ? 'me' : 'bot'}">${rich(m.text)}${m.esc ? '<button type="button" class="btn sm sup-escbtn" data-esc="1">تواصل مع الإدارة</button>' : ''}</div>`;
-  const render = () => { body.innerHTML = bubble({ role: 'bot', text: GREETING }) + history.map(bubble).join(''); body.scrollTop = body.scrollHeight; };
+  // بعد رد طويل نُظهر سؤال المستخدم وبداية الرد بدل آخر سطر
+  const render = () => {
+    body.innerHTML = bubble({ role: 'bot', text: GREETING }) + history.map(bubble).join('');
+    const me = [...body.querySelectorAll('.sup-msg.me')].at(-1);
+    body.scrollTop = me && history.at(-1)?.role === 'bot' ? Math.max(0, me.offsetTop - body.offsetTop - 8) : body.scrollHeight;
+  };
   const setRoute = () => { const r = (location.hash.replace(/^#\/?/, '').split(/[/?]/)[0]) || 'feed'; const hide = HIDE_ON.has(r); document.body.classList.toggle('sup-hidden', hide); if (hide) close(); document.body.classList.toggle('sup-immersive', ['feed', 'following', 'watch'].includes(r)); };
   const open = () => { panel.hidden = false; fab.setAttribute('aria-expanded', 'true'); document.body.classList.add('sup-open'); render(); setTimeout(() => $('#supText', panel).focus({ preventScroll: true }), 50); };
   function close() { panel.hidden = true; fab.setAttribute('aria-expanded', 'false'); document.body.classList.remove('sup-open'); }

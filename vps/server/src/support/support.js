@@ -63,7 +63,7 @@ const FALLBACK_MISS = 'ما لقيت جواب أكيد لسؤالك 🙏 جرّ�
 export function kbAnswer(query) {
   const s = searchKb(query);
   if (!s) return { reply: FALLBACK_MISS, topic: null, suggestEscalate: true };
-  return { reply: `«${s.title}»\n${s.body.replace(/\*\*/g, '')}`, topic: s.title, suggestEscalate: s.title === 'تواصل مع الإدارة' };
+  return { reply: `«${s.title}»\n${s.body.replace(/\*\*/g, '').replace(/^ {2,}- /gm, '   ◦ ').replace(/^- /gm, '• ')}`, topic: s.title, suggestEscalate: s.title === 'تواصل مع الإدارة' };
 }
 
 // ---------- Gemini ----------
