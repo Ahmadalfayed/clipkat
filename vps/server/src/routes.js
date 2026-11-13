@@ -21,6 +21,7 @@ import { alertNewRental, emailPaymentLink, PAYLINK_TEXT } from './admin-alert.js
 import { buildRtcRouter } from './rtc.js';
 import { buildGiftsRouter } from './gifts.js';
 import { buildPlusRouter } from './plus.js';
+import { buildSupportRouter } from './support/support.js';
 import { buildDownloadsRouter } from './downloads.js';
 import { buildPasswordResetRouter } from './password-reset.js';
 import { verifyGoogleIdToken, baseUsernameFromGoogle, uniqueUsername, unusablePasswordHash } from './google.js';
@@ -47,6 +48,7 @@ export function buildRouter() {
   });
   r.use(buildRtcRouter());          // البث المباشر والمكالمات
   r.use(buildGiftsRouter());        // العملات وهدايا البث (لا علاقة لها بمبيعات المتاجر)
+  r.use(buildSupportRouter());      // «مساعد كليب كات» — دعم العملاء
   r.use(buildPlusRouter());         // اشتراك «كليب كات بلس» الشهري (تنزيل بدون شعار)
   // تنزيل المقاطع: نفس قواعد الظهور (خصوصية/حظر/حالة النشر) عبر queryVideos
   r.use(buildDownloadsRouter((viewer, id) => queryVideos(viewer, ['v.id = $1'], [id], 1).then((x) => x[0] || null)));

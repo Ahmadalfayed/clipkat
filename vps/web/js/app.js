@@ -107,5 +107,6 @@ document.addEventListener('click', (e) => {
   await api.init();
   if (!location.hash) location.replace('#/feed');
   await route();
+  import('./support.js').then((m) => m.mountSupport(ctx)).catch((e) => console.warn('[support]', e));   // «مساعد كليب كات»
   window.__CK_READY = true;
 })().catch((e) => { console.error(e); $('#view').innerHTML = `<p class="empty">Error: ${esc(e.message)}</p>`; });

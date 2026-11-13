@@ -65,6 +65,9 @@ services:
       MAIL_HELO: ${MAIL_HELO:-}
       # تنبيه المشرف بطلبات إيجار المتاجر (افتراضياً: وجهة MX_ROUTES) — ADMIN_ALERT_EMAIL=off لإيقاف البريد
       ADMIN_ALERT_EMAIL: ${ADMIN_ALERT_EMAIL:-}
+      # «مساعد كليب كات»: مفتاح Gemini مجاني من Google AI Studio (بدونه يعمل المساعد بوضع البحث في قاعدة المعرفة)
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
       MX_ROUTES: ${MX_ROUTES:-}
       DKIM_DOMAIN: ${DKIM_DOMAIN:-}
       DKIM_SELECTOR: ${DKIM_SELECTOR:-}
