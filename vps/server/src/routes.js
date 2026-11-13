@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { config } from './config.js';
 import { q, tx, pool } from './db.js';
 import { loadUser, requireUser, requireAdmin, setSession, clearSession } from './auth.js';
-import { HttpError, bad, isUuid, str, hashPassword, verifyPassword, safeEqual, normTags, localUrl, norm, ms } from './util.js';
+import { HttpError, bad, isUuid, str, hashPassword, verifyPassword, safeEqual, normTags, localUrl, norm, ms, normContact } from './util.js';
 import { PROFILE_COLS, VIDEO_COLS, SOUND_COLS, mapProfile, mapVideo, mapStore, mapProduct, mapRental, mapNotif, mapComment, mapSound } from './mappers.js';
 import { STORE_POLICY_VERSION } from './policy.js';
 import { visibleSql, notBlockedSql, isBlockedBetween, canSeeUserContent, COMMENT_POLICIES, MESSAGE_POLICIES, REPORT_REASONS } from './privacy.js';
@@ -34,6 +34,16 @@ export function buildRouter() {
   const r = express.Router();
   r.use(mkLimit(60000, config.rateApiMax));
   r.use(loadUser);
+  // سجل مختصر لأخطاء مسارات المتاجر ورفع الصور: المسار، الحالة، رمز الخطأ، الحقل، معرّف المستخدم — بدون أي محتوى من الطلب
+  r.use((req, res, next) => {
+    if (!/^\/(stores|rentals|upload\/image)(\/|$)/.test(req.path) || req.method === 'GET') return next();
+    res.on('finish', () => {
+      if (res.statusCode < 400) return;
+      const p = req.path.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ':id');
+      console.warn(`[stores] ${req.method} ${p} ${res.statusCode} err=${res.locals.errCode || '-'}${res.locals.errField ? ' field=' + res.locals.errField : ''} user=${req.user?.id || '-'}`);
+    });
+    next();
+  });
   r.use(buildRtcRouter());          // البث المباشر والمكالمات
   r.use(buildGiftsRouter());        // العملات وهدايا البث (لا علاقة لها بمبيعات المتاجر)
   r.use(buildPlusRouter());         // اشتراك «كليب كات بلس» الشهري (تنزيل بدون شعار)
@@ -622,12 +632,15 @@ export function buildRouter() {
   r.get('/stores/by-owner/:uid', h(async (req, res) => res.json(isUuid(req.params.uid) ? await withPending(mapStore((await q('select * from stores where owner_id = $1', [req.params.uid])).rows[0]), req.user) : null)));
   r.get('/stores/:id', h(async (req, res) => res.json(isUuid(req.params.id) ? await withPending(mapStore((await q('select * from stores where id = $1', [req.params.id])).rows[0]), req.user) : null)));
 
+  // كل خطأ في حقل يرجع field باسم الحقل حتى تعرض الواجهة رسالة واضحة (بدل «bad»)
+  const field = (name, fn) => { try { return fn(); } catch (e) { if (e instanceof HttpError && e.status === 400) { e.field = name; } throw e; } };
+  const STORE_CATS = ['perfume', 'coffee', 'fashion', 'art', 'digital', 'food', 'beauty', 'other'];
   const storeFields = (b, plan) => ({
-    name: str(b.name, 40, { min: 1 }),
-    category: ['perfume', 'coffee', 'fashion', 'art', 'digital', 'food', 'beauty', 'other'].includes(b.category) ? b.category : 'other',
-    description: str(b.description, 200),
-    contact: b.contact ? (/^https?:\/\/\S{1,300}$/i.test(String(b.contact).trim()) ? String(b.contact).trim() : (() => { throw bad('bad'); })()) : null,
-    logo: localUrl(b.logo), banner: plan && !plan.custom_banner ? null : localUrl(b.banner)
+    name: field('name', () => str(b.name, 40, { min: 1 })),
+    category: STORE_CATS.includes(b.category) ? b.category : 'other',
+    description: field('description', () => str(b.description, 200)),
+    contact: normContact(b.contact),
+    logo: field('logo', () => localUrl(b.logo)), banner: plan && !plan.custom_banner ? null : field('banner', () => localUrl(b.banner))
   });
   r.post('/stores', requireUser, h(async (req, res) => {
     const { store = {}, planId, payment = {} } = req.body || {}; requirePolicy(req.body);
@@ -658,12 +671,12 @@ export function buildRouter() {
     const st = need((await q('select s.*, p.custom_banner from stores s join plans p on p.id = s.plan_id where s.id = $1', [id])).rows[0]);
     if (st.owner_id !== req.user.id && !req.user.is_admin) throw new HttpError(403, 'forbidden');
     const sets = []; const vals = []; const set = (col, v) => { vals.push(v); sets.push(`${col} = $${vals.length}`); };
-    if (b.name !== undefined) set('name', str(b.name, 40, { min: 1 }));
-    if (b.category !== undefined) set('category', ['perfume', 'coffee', 'fashion', 'art', 'digital', 'food', 'beauty', 'other'].includes(b.category) ? b.category : 'other');
-    if (b.description !== undefined) set('description', str(b.description, 200));
-    if (b.contact !== undefined) set('contact_url', b.contact ? (/^https?:\/\/\S{1,300}$/i.test(String(b.contact).trim()) ? String(b.contact).trim() : (() => { throw bad('bad'); })()) : null);
-    if (b.logo) set('logo_url', localUrl(b.logo));
-    if (b.banner && st.custom_banner) set('banner_url', localUrl(b.banner));
+    if (b.name !== undefined) set('name', field('name', () => str(b.name, 40, { min: 1 })));
+    if (b.category !== undefined) set('category', STORE_CATS.includes(b.category) ? b.category : 'other');
+    if (b.description !== undefined) set('description', field('description', () => str(b.description, 200)));
+    if (b.contact !== undefined) set('contact_url', normContact(b.contact));
+    if (b.logo) set('logo_url', field('logo', () => localUrl(b.logo)));
+    if (b.banner && st.custom_banner) set('banner_url', field('banner', () => localUrl(b.banner)));
     if (sets.length) { vals.push(id); await q(`update stores set ${sets.join(', ')} where id = $${vals.length}`, vals); }
     res.json(mapStore((await q('select * from stores where id = $1', [id])).rows[0]));
   }));

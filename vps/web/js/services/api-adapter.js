@@ -40,7 +40,7 @@ export class ApiAdapter {
     let res;
     try { res = await fetch(this.base + path, opt); } finally { clearTimeout(tm); }
     let json = null; try { json = await res.json(); } catch { /* ليس JSON */ }
-    if (!res.ok) { const e = new Error(json?.error || 'failed'); e.status = res.status; if (json?.limit) e.limit = json.limit; throw e; }
+    if (!res.ok) { const e = new Error(json?.error || 'failed'); e.status = res.status; if (json?.limit) e.limit = json.limit; if (json?.field) e.field = json.field; throw e; }
     return json;
   }
   _qs(o) { const p = new URLSearchParams(); for (const [k, v] of Object.entries(o)) if (v !== undefined && v !== null && v !== '') p.set(k, v); const s = p.toString(); return s ? '?' + s : ''; }
@@ -51,6 +51,9 @@ export class ApiAdapter {
     const fd = new FormData(); fd.append('file', dataURLToBlob(value), 'image.jpg');
     return (await this._req('POST', '/upload/image', undefined, { form: fd })).url;
   }
+
+  // رفع صورة مع تحديد الحقل عند الفشل (حتى تعرض الواجهة أي صورة فيها المشكلة)
+  async _imgField(value, field) { try { return await this._img(value); } catch (e) { if (e.status && e.status !== 401 && e.status !== 429) e.field = field; throw e; } }
 
   // ---------- Auth ----------
   async currentUser() {
@@ -223,14 +226,14 @@ export class ApiAdapter {
   async getMyStore() { const me = await this.currentUser(); return me ? this.getStoreByOwner(me.id) : null; }
   async createStoreWithRental({ store, planId, payment }) {
     await this._meOrThrow(); const plan = PLANS.find((p) => p.id === planId);
-    const body = { name: store.name, category: store.category, description: store.description, contact: store.contact || '', logo: await this._img(store.logo), banner: plan?.banner ? await this._img(store.banner) : null };
+    const body = { name: store.name, category: store.category, description: store.description, contact: store.contact || '', logo: await this._imgField(store.logo, 'logo'), banner: plan?.banner ? await this._imgField(store.banner, 'banner') : null };
     // الإيجار يبقى pending — التفعيل من المشرف أو Webhook الدفع فقط
     return this._req('POST', '/stores', { store: body, planId, payment: { method: payment?.method, ref: payment?.ref }, acceptPolicy: POLICY.version });
   }
   async renewRental({ storeId, planId, payment }) { await this._meOrThrow(); return this._req('POST', `/stores/${storeId}/rentals`, { planId, payment: { method: payment?.method, ref: payment?.ref }, acceptPolicy: POLICY.version }); }
   async updateStore(id, patch) {
     const body = { name: patch.name, category: patch.category, description: patch.description, contact: patch.contact };
-    if (patch.logo) body.logo = await this._img(patch.logo); if (patch.banner) body.banner = await this._img(patch.banner);
+    if (patch.logo) body.logo = await this._imgField(patch.logo, 'logo'); if (patch.banner) body.banner = await this._imgField(patch.banner, 'banner');
     return this._req('PATCH', '/stores/' + id, body);
   }
   async listRentals({ storeId } = {}) { return this._req('GET', '/rentals' + this._qs({ storeId })); }

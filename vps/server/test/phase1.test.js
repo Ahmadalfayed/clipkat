@@ -17,7 +17,7 @@ const BASE = `http://127.0.0.1:${PORT}/api`;
 const ADMIN = { email: `admin-${crypto.randomUUID()}@test.local`, password: crypto.randomBytes(18).toString('base64url') };
 const here = path.dirname(new URL(import.meta.url).pathname);
 const SAMPLE = path.join(here, '../../web/media/videos/coffee.mp4');
-let srv; const upl = fs.mkdtempSync(path.join(os.tmpdir(), 'ck-test-'));
+let srv; let errLog = ''; const upl = fs.mkdtempSync(path.join(os.tmpdir(), 'ck-test-'));
 
 class Client {
   constructor() { this.cookie = ''; }
@@ -46,7 +46,7 @@ before(async () => {
   const cl = new pg.Client({ connectionString: DB }); await cl.connect();
   await cl.query('drop schema public cascade; create schema public;'); await cl.end();
   srv = spawn(process.execPath, ['src/index.js'], { cwd: path.join(here, '..'), env: { ...process.env, PORT: String(PORT), DATABASE_URL: DB, JWT_SECRET: crypto.randomBytes(32).toString('hex'), UPLOAD_DIR: upl, ADMIN_EMAIL: ADMIN.email, ADMIN_PASSWORD: ADMIN.password, RATE_AUTH_MAX: '500', RATE_API_MAX: '5000' }, stdio: ['ignore', 'pipe', 'pipe'] });
-  srv.stderr.on('data', (d) => process.stderr.write(d));
+  srv.stderr.on('data', (d) => { errLog += d; process.stderr.write(d); });
   await new Promise((ok, no) => { const t = setTimeout(() => no(new Error('server start timeout')), 30000); srv.stdout.on('data', (d) => { if (String(d).includes('listening')) { clearTimeout(t); ok(); } }); srv.on('exit', (c) => no(new Error('server exited ' + c))); });
 });
 after(() => { srv?.kill('SIGTERM'); fs.rmSync(upl, { recursive: true, force: true }); });
@@ -319,4 +319,60 @@ test('homepage SEO tags, robots, sitemap and og image are served', async () => {
 
   const ico = await fetch(root + '/assets/apple-touch-icon.png');
   assert.equal(ico.status, 200);
+});
+
+// ===== رابط التواصل للمتجر: قبول الصيغ الشائعة ورسائل حقول واضحة =====
+const CONTACT_CASES = [
+  ['96512345678', 'https://wa.me/96512345678'], ['+965 5123 4567', 'https://wa.me/96551234567'], ['٩٦٥٥١٢٣٤٥٦٧', 'https://wa.me/96551234567'],
+  ['51234567', 'https://wa.me/96551234567'], ['00965-5123-4567', 'https://wa.me/96551234567'], ['wa.me/96551234567', 'https://wa.me/96551234567'],
+  ['@anwar.perfume', 'https://instagram.com/anwar.perfume'], ['instagram.com/anwar', 'https://instagram.com/anwar'], ['www.instagram.com/anwar', 'https://www.instagram.com/anwar'],
+  ['t.me/anwar', 'https://t.me/anwar'], ['https://wa.me/96551234567', 'https://wa.me/96551234567'], ['', null],
+  ['javascript:alert(1)', 'X'], ['JavaScript://x.com/%0aalert(1)', 'X'], ['data:text/html,hi', 'X'], ['vbscript:x', 'X'], ['http://u:p@x.com', 'X'], ['anwarperfume', 'X'], ['123', 'X'], ['https://x', 'X'], ['a'.repeat(301), 'X']
+];
+test('contact normalizer: server and web agree, output is only http/https', async () => {
+  const { normContact } = await import('../src/util.js');
+  const web = await import('../../web/js/contact-url.js');
+  for (const [inp, want] of CONTACT_CASES) {
+    let got; try { got = normContact(inp); } catch (e) { assert.equal(e.field, 'contact'); got = 'X'; }
+    assert.equal(got, want, inp);
+    const w = web.normContact(inp); assert.equal(w === null ? 'X' : w === '' ? null : w, want, 'web ' + inp);
+    if (got && got !== 'X') assert.match(got, /^https?:\/\//);
+  }
+});
+
+test('store rental accepts phone/WhatsApp/@handle contacts, stays pending, and names the wrong field', async () => {
+  const m = await user('contact_merchant');
+  const ver = (await m.get('/policy/store-rental')).body.version;
+  const base = { name: 'متجر أنوار للعطور', category: 'perfume', description: 'عطور ودهن عود 🌹' };
+  const post = (store) => m.post('/stores', { store: { ...base, ...store }, planId: 'monthly', payment: { method: 'knet', ref: 'DEMO-X' }, acceptPolicy: ver });
+  for (const [store, fieldName] of [[{ contact: 'javascript:alert(1)' }, 'contact'], [{ contact: 'anwarperfume' }, 'contact'], [{ name: 'م'.repeat(41) }, 'name'], [{ name: '  ' }, 'name'],
+    [{ description: 'و'.repeat(201) }, 'description'], [{ logo: 'https://evil.example/x.png' }, 'logo'], [{ banner: '/uploads/images/../../etc/passwd' }, 'banner']]) {
+    const r = await post(store); assert.equal(r.status, 400, JSON.stringify(store)); assert.equal(r.body.error, 'bad'); assert.equal(r.body.field, fieldName, JSON.stringify(store));
+  }
+  for (let i = 0; i < 40 && !errLog.includes('[stores] POST /api/stores 400'); i++) await new Promise((r) => setTimeout(r, 50));
+  assert.match(errLog, new RegExp(`\\[stores\\] POST /api/stores 400 err=bad field=contact user=${m.me.id}`));
+  assert.ok(!errLog.includes('javascript:alert'), 'request bodies are not logged');
+  const ok = await post({ contact: '+965 5123 4567' });
+  assert.equal(ok.status, 201, JSON.stringify(ok.body)); assert.equal(ok.body.contact, 'https://wa.me/96551234567'); assert.equal(ok.body.pending, true);
+  const again = await post({ contact: '' }); assert.equal(again.status, 409); assert.equal(again.body.error, 'exists');
+  const cl = new pg.Client({ connectionString: DB }); await cl.connect();
+  try { const rt = (await cl.query('select status from rentals where owner_id = $1', [m.me.id])).rows; assert.deepEqual(rt.map((x) => x.status), ['pending']); } finally { await cl.end(); }
+  const p1 = await m.patch(`/stores/${ok.body.id}`, { contact: '@anwar.perfume' }); assert.equal(p1.status, 200); assert.equal(p1.body.contact, 'https://instagram.com/anwar.perfume');
+  const p2 = await m.patch(`/stores/${ok.body.id}`, { contact: 'data:text/html,x' }); assert.equal(p2.status, 400); assert.equal(p2.body.field, 'contact');
+  const p3 = await m.patch(`/stores/${ok.body.id}`, { contact: '' }); assert.equal(p3.status, 200); assert.equal(p3.body.contact || '', '');
+});
+
+test('store form: contact input is free text with hint, clear field errors, matching length limits', async () => {
+  const root = BASE.replace(/\/api$/, '');
+  const co = await (await fetch(root + '/js/views/checkout.js')).text();
+  assert.ok(co.includes('name="contact" type="text"') && !co.includes('name="contact" type="url"'));
+  assert.ok(co.includes('maxlength="40"') && co.includes('maxlength="200"') && co.includes('storeErrorMessage'));
+  const i18n = await (await fetch(root + '/js/i18n.js')).text();
+  for (const k of ['storeErr_name', 'storeErr_description', 'storeErr_contact', 'storeErr_logo', 'storeErr_banner', 'storeErr_exists', 'contactHint']) assert.ok(i18n.split(k + ':').length === 3, k);
+  const { storeErrorMessage } = await import('../../web/js/contact-url.js');
+  const tt = (k) => ({ storeErr_contact: 'C', storeErr_exists: 'E', storeErr_generic: 'G', storeErr_logo: 'L' }[k] ?? k);
+  assert.equal(storeErrorMessage(Object.assign(new Error('bad'), { field: 'contact' }), tt), 'C');
+  assert.equal(storeErrorMessage(Object.assign(new Error('badFile'), { field: 'logo' }), tt), 'L');
+  assert.equal(storeErrorMessage(new Error('exists'), tt), 'E');
+  assert.equal(storeErrorMessage(new Error('bad'), tt), 'G');              // لا نعرض «bad» الخام للمستخدم أبداً
 });

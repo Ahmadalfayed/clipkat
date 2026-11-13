@@ -3,6 +3,7 @@ import { t, fmtKWD, fmtDate, fmtNum } from '../i18n.js';
 import { PLANS, STORE_CATEGORIES } from '../config.js';
 import { icon, esc, $, $$, toast, openSheet, fileToDataURL, productImg, storeLogo, storeBanner, emptyState, verifiedBadge } from '../ui.js';
 import { pageHead } from './common.js';
+import { normContact, storeErrorMessage } from '../contact-url.js';
 
 export async function render(el, params, ctx) {
   if (!(await ctx.requireLogin())) return;
@@ -72,14 +73,23 @@ export async function render(el, params, ctx) {
     f.innerHTML = `<label class="field"><span>${esc(t('storeName'))}</span><input name="name" required maxlength="40" value="${esc(s.name)}"></label>
       <label class="field"><span>${esc(t('category'))}</span><select name="category">${STORE_CATEGORIES.map((c) => `<option value="${c}" ${c === s.category ? 'selected' : ''}>${esc(t('cat_' + c))}</option>`).join('')}</select></label>
       <label class="field"><span>${esc(t('description'))}</span><textarea name="description" rows="2" maxlength="200">${esc(s.description)}</textarea></label>
-      <label class="field"><span>${esc(t('contactLink'))}</span><input name="contact" type="url" dir="ltr" value="${esc(s.contact)}" placeholder="${esc(t('contactPh'))}"></label>
+      <label class="field"><span>${esc(t('contactLink'))}</span><input name="contact" type="text" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="300" dir="ltr" value="${esc(s.contact)}" placeholder="${esc(t('contactPh'))}"><small class="muted">${esc(t('contactHint'))}</small></label>
       <div class="two"><label class="field"><span>${esc(t('logo'))}</span><input type="file" accept="image/*" id="sLogo"></label>
       <label class="field ${st.plan.banner ? '' : 'locked'}"><span>${esc(t('banner'))}</span><input type="file" accept="image/*" id="sBanner" ${st.plan.banner ? '' : 'disabled'}>${st.plan.banner ? '' : `<small class="muted">${esc(t('bannerLocked'))}</small>`}</label></div>
+      <p class="form-err" role="alert"></p>
       <button class="btn primary block" type="submit">${esc(t('saveChanges'))}</button>`;
     const sh = openSheet({ title: t('storeSettings'), body: f });
-    $('#sLogo', f).addEventListener('change', async (e) => { if (e.target.files[0]) logo = await fileToDataURL(e.target.files[0], 256); });
-    $('#sBanner', f).addEventListener('change', async (e) => { if (e.target.files[0]) banner = await fileToDataURL(e.target.files[0], 1000); });
-    f.addEventListener('submit', async (e) => { e.preventDefault(); const fd = new FormData(f); await api.updateStore(s.id, { name: fd.get('name').trim() || s.name, category: fd.get('category'), description: fd.get('description'), contact: fd.get('contact'), logo, banner }); sh.close(); toast(t('saved_ok'), 'ok'); ctx.rerender(); });
+    const fErr = () => $('.form-err', f);
+    const imgPick = (id, max, setV, field) => $(id, f).addEventListener('change', async (e) => { if (!e.target.files[0]) return; try { setV(await fileToDataURL(e.target.files[0], max)); fErr().textContent = ''; } catch { e.target.value = ''; setV(undefined); fErr().textContent = t('storeErr_' + field); } });
+    imgPick('#sLogo', 256, (v) => { logo = v; }, 'logo');
+    imgPick('#sBanner', 1000, (v) => { banner = v; }, 'banner');
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault(); const fd = new FormData(f); fErr().textContent = '';
+      const contact = normContact(fd.get('contact'));
+      if (contact === null) { fErr().textContent = t('storeErr_contact'); $('[name=contact]', f).focus(); return; }
+      try { await api.updateStore(s.id, { name: fd.get('name').trim() || s.name, category: fd.get('category'), description: fd.get('description'), contact, logo, banner }); sh.close(); toast(t('saved_ok'), 'ok'); ctx.rerender(); }
+      catch (ex) { fErr().textContent = storeErrorMessage(ex, t); }
+    });
   });
 }
 

@@ -46,5 +46,34 @@ export const localUrl = (v) => {
   if (typeof v !== 'string' || !/^\/uploads\/images\/[0-9a-f-]{36}\/[\w./-]{1,120}$/i.test(v) || v.includes('..')) throw bad('bad');
   return v;
 };
+// رابط التواصل للمتجر: يقبل الصيغ الشائعة ويحوّلها لرابط https آمن
+// رقم/واتساب → https://wa.me/<أرقام> · ‎@حساب أو instagram.com/x → https://instagram.com/x · نطاق بدون https → https://
+// النتيجة دائماً http/https فقط (لا javascript: ولا data:) — وإلا يُرمى الخطأ 'bad' مع field=contact
+export function normContact(v) {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== 'string') throw bad('bad', { field: 'contact' });
+  let s = v.replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x660)).replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x6F0))
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '').trim();
+  if (!s) return null;
+  const fail = () => { throw bad('bad', { field: 'contact' }); };
+  if (s.length > 300) fail();
+  let url;
+  const digits = s.replace(/[\s\-().]/g, '');
+  if (/^\+?\d{7,15}$/.test(digits)) {
+    let n = digits.replace(/^\+/, '').replace(/^00/, '');
+    if (n.length === 8) n = '965' + n;                      // رقم كويتي محلي بدون رمز الدولة
+    if (n.length < 8 || n.length > 15) fail();
+    url = 'https://wa.me/' + n;
+  } else if (/^@[A-Za-z0-9._]{1,30}$/.test(s)) url = 'https://instagram.com/' + s.slice(1);
+  else if (/^https?:\/\//i.test(s)) url = s;
+  else if (/^[a-z][a-z0-9+.-]*:/i.test(s) && !/^[a-z0-9.-]+\.[a-z]{2,}(:\d+)?(\/|$)/i.test(s)) fail();   // أي بروتوكول آخر مرفوض
+  else if (/^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}([/?#]\S*)?$/i.test(s)) url = 'https://' + s;
+  else fail();
+  let u; try { u = new URL(url); } catch { fail(); }
+  if (!['http:', 'https:'].includes(u.protocol) || !u.hostname.includes('.') || u.username || u.password || /\s/.test(url)) fail();
+  const out = u.href;
+  if (out.length > 300 || !/^https?:\/\//i.test(out)) fail();
+  return out;
+}
 const NORM = (s) => String(s || '').toLowerCase().replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
 export const norm = NORM;
