@@ -63,6 +63,9 @@ services:
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-كليب كات}
       MAIL_DIRECT: ${MAIL_DIRECT:-0}
       MAIL_HELO: ${MAIL_HELO:-}
+      # تنبيه المشرف بطلبات إيجار المتاجر (افتراضياً: وجهة MX_ROUTES) — ADMIN_ALERT_EMAIL=off لإيقاف البريد
+      ADMIN_ALERT_EMAIL: ${ADMIN_ALERT_EMAIL:-}
+      MX_ROUTES: ${MX_ROUTES:-}
       DKIM_DOMAIN: ${DKIM_DOMAIN:-}
       DKIM_SELECTOR: ${DKIM_SELECTOR:-}
       DKIM_KEY_FILE: ${DKIM_KEY_FILE:-/run/dkim/private.pem}

@@ -17,6 +17,7 @@ import { publishDue } from './publisher.js';
 import { imageUpload, videoUpload, audioUpload, sniffImage, sniffVideo, place, rm, rid, makePoster, dirs, removeVideoFiles } from './uploads.js';
 import { sniffAudio, probe, extractAudio } from './media.js';
 import { activateRental, cancelRental, slots, notify } from './rentals.js';
+import { alertNewRental } from './admin-alert.js';
 import { buildRtcRouter } from './rtc.js';
 import { buildGiftsRouter } from './gifts.js';
 import { buildPlusRouter } from './plus.js';
@@ -654,6 +655,7 @@ export function buildRouter() {
       await recordAcceptance(c, req.user.id, s.id, rt.id);
       return s;
     });
+    alertNewRental({ storeId: out.id, storeName: out.name, ownerId: req.user.id, username: req.user.username, planId: plan.id, amount: plan.price });   // تنبيه المشرف (في الخلفية)
     res.status(201).json({ ...mapStore(out), pending: true });
   }));
   r.post('/stores/:id/rentals', requireUser, h(async (req, res) => {
@@ -664,6 +666,7 @@ export function buildRouter() {
       const rt = (await c.query('insert into rentals (store_id, owner_id, plan_id, amount, method, gateway, gateway_ref, policy_version) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id', [st.id, req.user.id, plan.id, plan.price, ['knet', 'card', 'applepay'].includes(payment.method) ? payment.method : null, 'mock', String(payment.ref || '').slice(0, 60) || null, STORE_POLICY_VERSION])).rows[0];
       await recordAcceptance(c, req.user.id, st.id, rt.id);
     });
+    alertNewRental({ storeId: st.id, storeName: st.name, ownerId: req.user.id, username: req.user.username, planId: plan.id, amount: plan.price, renew: true });
     res.status(201).json(await withPending(mapStore(st), req.user));
   }));
   r.patch('/stores/:id', requireUser, h(async (req, res) => {

@@ -29,9 +29,9 @@ export const hashToken = (t) => crypto.createHash('sha256').update(String(t)).di
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 const isGoogleOnly = (row) => !String(row.password_hash || '').startsWith('scrypt$');
 const siteUrl = () => config.publicUrl || (env.DOMAIN ? `https://${env.DOMAIN}` : '');
-const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+export const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-function layout(title, bodyHtml) {
+export function layout(title, bodyHtml) {
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(title)}</title></head>
 <body style="margin:0;background:#f7f5f0;font-family:Tahoma,Arial,sans-serif;color:#1d2433;direction:rtl;text-align:right">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f5f0;padding:24px 12px"><tr><td align="center">
@@ -41,7 +41,7 @@ function layout(title, bodyHtml) {
 <tr><td style="font-size:12px;color:#8a8f99;padding-top:20px;border-top:1px solid #eee">رسالة آلية من كليب كات — لا ترد عليها.<br>جميع الحقوق محفوظة © 2026 وطن النهار</td></tr>
 </table></td></tr></table></body></html>`;
 }
-const button = (href, label) => `<p style="text-align:center;margin:24px 0"><a href="${escHtml(href)}" style="background:#0e9f84;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:12px;font-weight:bold;display:inline-block">${escHtml(label)}</a></p>`;
+export const button = (href, label) => `<p style="text-align:center;margin:24px 0"><a href="${escHtml(href)}" style="background:#0e9f84;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:12px;font-weight:bold;display:inline-block">${escHtml(label)}</a></p>`;
 
 export function resetEmail(user, link) {
   const hi = `مرحباً ${escHtml(user.name || user.username)}،`;
