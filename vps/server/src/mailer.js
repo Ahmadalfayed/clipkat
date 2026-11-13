@@ -88,19 +88,21 @@ async function sendDirect(c, msg) {
 }
 
 let smtpTransport;
-export async function sendMail({ to, subject, text, html }) {
+export async function sendMail({ to, subject, text, html, fromName, replyTo, attachments, headers }) {
   const c = mailConfig();
   const mode = mailMode(c);
   if (mode === 'off') { console.warn('[mail] disabled (set MAIL_FROM + SMTP_HOST or MAIL_DIRECT=1) — not sent to', maskEmail(to)); return { sent: false, mode }; }
   const msg = {
-    from: { name: c.fromName, address: c.from }, to, subject, text, html,
+    from: { name: fromName || c.fromName, address: c.from }, to, subject, text, html,
     envelope: { from: c.from, to },
-    headers: { 'Auto-Submitted': 'auto-generated', 'X-Auto-Response-Suppress': 'All' }
+    headers: { 'Auto-Submitted': 'auto-generated', 'X-Auto-Response-Suppress': 'All', ...(headers || {}) }
   };
+  if (replyTo) msg.replyTo = replyTo;
+  if (attachments?.length) msg.attachments = attachments;
   if (mode === 'outbox') {
     fs.mkdirSync(c.outbox, { recursive: true });
     const f = path.join(c.outbox, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.json`);
-    fs.writeFileSync(f, JSON.stringify({ to, from: c.from, subject, text, html }));
+    fs.writeFileSync(f, JSON.stringify({ to, from: c.from, fromName: msg.from.name, replyTo: replyTo || null, subject, text, html, headers: msg.headers, attachments: (attachments || []).map((a) => ({ filename: a.filename, size: a.content?.length || 0, contentType: a.contentType })) }));
     return { sent: true, mode };
   }
   if (mode === 'smtp') {
@@ -110,8 +112,8 @@ export async function sendMail({ to, subject, text, html }) {
       connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 30000, dkim: dkimOpts(c)
     });
     const info = await smtpTransport.sendMail(msg);
-    return { sent: true, mode, id: info.messageId };
+    return { sent: true, mode, id: info.messageId, response: info.response };
   }
   const info = await sendDirect(c, msg);
-  return { sent: true, mode, id: info.messageId, via: info.via };
+  return { sent: true, mode, id: info.messageId, via: info.via, response: info.response };
 }

@@ -80,6 +80,41 @@ services:
     networks: [internal]
     expose: ["3000"]
 
+  # استقبال البريد (support@النطاق) وتحويله لبريد صاحب الموقع — يُشغَّل فقط عند: COMPOSE_PROFILES=...,mail
+  # للاستقبال فقط: يقبل العناوين في MX_ROUTES فقط (ليس مُرحِّلاً مفتوحاً)، ويحوّل عبر نفس إعدادات الإرسال (DKIM)
+  mx:
+    build: .
+    restart: unless-stopped
+    profiles: ["mail"]
+    command: ["node", "server/src/mx.js"]
+    environment:
+      MX_PORT: 2525
+      MX_ROUTES: ${MX_ROUTES:-}
+      MX_HOSTNAME: ${MAIL_HELO:-}
+      MX_MAX_MB: ${MX_MAX_MB:-15}
+      MX_RATE_PER_HOUR: ${MX_RATE_PER_HOUR:-30}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_DIRECT: ${MAIL_DIRECT:-0}
+      MAIL_HELO: ${MAIL_HELO:-}
+      DKIM_DOMAIN: ${DKIM_DOMAIN:-}
+      DKIM_SELECTOR: ${DKIM_SELECTOR:-}
+      DKIM_KEY_FILE: ${DKIM_KEY_FILE:-/run/dkim/private.pem}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_SECURE: ${SMTP_SECURE:-0}
+    ports:
+      - "25:2525"
+    volumes:
+      - ./data/dkim:/run/dkim:ro
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 2525 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [internal]
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
