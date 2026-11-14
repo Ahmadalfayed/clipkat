@@ -45,15 +45,15 @@ export async function render(el, params, ctx) {
     <section class="card wa-admin-set" id="waAdminSet">
       <h2>${esc(t('adminWaLabel'))}</h2>
       <form class="form" id="waForm" novalidate>
-        <label class="field"><span>${esc(t('adminWaLabel'))}</span><input name="number" type="tel" inputmode="tel" dir="ltr" autocomplete="off" maxlength="30" value="${esc(waSet.adminWhatsapp ? waSet.adminWhatsapp.replace(/^https:\/\/wa\.me\//, '') : '')}" placeholder="${esc(t('adminWaPh'))}"></label>
+        <label class="field"><span class="visually-hidden">${esc(t('adminWaLabel'))}</span><input name="number" type="tel" inputmode="tel" dir="ltr" autocomplete="off" maxlength="30" value="${esc(waSet.adminWhatsapp ? waSet.adminWhatsapp.replace(/^https:\/\/wa\.me\//, '') : '')}" placeholder="${esc(t('adminWaPh'))}"></label>
         <p class="form-err" role="alert"></p>
         <p class="muted sm">${esc(t('waAdminHint'))}</p>
-        <div class="paylink-actions"><button class="btn sm primary" type="submit">${esc(t('saveChanges'))}</button>${waSet.adminWhatsapp ? `<button class="btn sm ghost" type="submit" data-clear="1">${esc(t('payClear'))}</button>` : ''}</div>
+        <div class="paylink-actions"><button class="btn sm primary" type="submit">${esc(t('saveChanges'))}</button>${waSet.adminWhatsapp ? `<button class="btn sm ghost" type="submit" data-clear="1">${esc(t('adminWaClear'))}</button>` : ''}</div>
       </form>
     </section>
     <h2 class="sec-title" id="coinReqs">${esc(t('coinReqs'))}</h2>
     <div class="seg" role="tablist">
-      ${['pending', 'paid', 'rejected'].map((x) => `<a role="tab" href="#/admin?c=${x}" class="${cstatus === x ? 'on' : ''}">${esc(x === 'pending' ? t('pending') : x === 'paid' ? t('coinPaid') : t('coinRejected'))}</a>`).join('')}
+      ${['pending', 'paid', 'rejected'].map((x) => `<a role="tab" href="#/admin?c=${x}" class="${cstatus === x ? 'on' : ''}">${esc(x === 'pending' ? t('coinPending') : x === 'paid' ? t('coinPaid') : t('coinRejected'))}</a>`).join('')}
     </div>
     ${coinReqs.requests?.length ? `<div class="table-wrap stack"><table class="tbl"><thead><tr><th>${esc(t('owner'))}</th><th>${esc(t('rechargeCoins'))}</th><th>${esc(t('amount'))}</th><th>${esc(t('date'))}</th><th>${esc(t('status'))}</th></tr></thead><tbody>
       ${coinReqs.requests.map((r) => `<tr>

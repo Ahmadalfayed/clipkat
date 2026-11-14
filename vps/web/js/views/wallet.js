@@ -20,9 +20,9 @@ const ledgerLabel = (x) => {
 function coinPayCard(r, waOn) {
   if (!r) return '';
   const url = /^https?:\/\//i.test(r.paymentUrl || '') ? r.paymentUrl : '';
-  if (!url) return `<section class="card pay-card waiting" id="coinPayCard"><h2>${esc(t('coinPayTitle'))}</h2><p class="pay-amount">${esc(fmtKWD(r.price))} <small class="muted">· ${esc(fmtInt(r.coins))} ${esc(t('myCoins'))}</small></p><p class="muted"><b>${esc(t('payWaiting'))}</b><br>${esc(t('payWaitingSub'))}</p>${waAdminBtn('coins', r.id, waOn)}</section>`;
+  if (!url) return `<section class="card pay-card waiting" id="coinPayCard"><h2>${esc(t('coinPayTitle'))}</h2><p class="pay-amount">${esc(fmtKWD(r.price))} <small class="muted">· ${esc(fmtInt(r.coins))} ${esc(t('coinUnit'))}</small></p><p class="muted"><b>${esc(t('payWaiting'))}</b><br>${esc(t('payWaitingSub'))}</p>${waAdminBtn('coins', r.id, waOn)}</section>`;
   return `<section class="card pay-card" id="coinPayCard"><h2>${esc(t('coinPayTitle'))}</h2>
-    <p class="pay-amount">${esc(fmtKWD(r.price))} <small class="muted">· ${esc(fmtInt(r.coins))}</small></p>
+    <p class="pay-amount">${esc(fmtKWD(r.price))} <small class="muted">· ${esc(fmtInt(r.coins))} ${esc(t('coinUnit'))}</small></p>
     ${r.paymentNote ? `<p class="pay-note">${esc(r.paymentNote)}</p>` : ''}
     <a class="btn primary block lg" id="payCoinsBtn" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(t('payNow'))}</a>
     ${waAdminBtn('coins', r.id, waOn)}

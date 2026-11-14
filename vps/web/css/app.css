@@ -831,6 +831,7 @@ form.paylink .field { margin: 0; }
 .pay-card .wa-admin { margin: 0 0 8px; }
 .coin-req-note { margin: 0 0 10px; }
 .wa-admin-set { margin: 14px 0; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
 /* ===== مساعد كليب كات (زر دعم عائم + لوحة محادثة) ===== */
 .sup-fab { position: fixed; z-index: 35; inset-inline-start: max(14px, calc((100vw - var(--app-w)) / 2 + 14px)); bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 14px); width: 50px; height: 50px; border-radius: 50%; border: 0; background: var(--grad); color: var(--primary-ink); display: grid; place-items: center; box-shadow: 0 8px 22px rgba(18,194,160,.35); cursor: pointer; transition: transform .2s var(--ease); }
