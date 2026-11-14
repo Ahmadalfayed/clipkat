@@ -19,18 +19,28 @@ export function packagesHTML(cfg) {
     <span class="pkg-name">${esc(t('pkg_' + p.id))}${p.bonus ? ` <em>+${fmtInt(p.bonus)} ${esc(t('bonus'))}</em>` : ''}</span>
     <span class="pkg-price">${esc(kwd(p.price))}</span></button>`).join('')}</div>`;
 }
-// شراء باقة (الوضع التجريبي يضيف العملات فوراً بلا أي دفع)
+// طلب شراء يدوي: يُنشئ طلباً بانتظار رابط الدفع من الإدارة (مسار /coins/purchase التجريبي يبقى في الخادم فقط)
 export async function buyPackage(pkgId, btn) {
   if (btn) btn.disabled = true;
   try {
-    const r = await rq('POST', '/coins/purchase', { packageId: pkgId, key: newKey() });
-    if (r.redirectUrl) { location.href = r.redirectUrl; return null; }
-    toast(r.demo ? t('demoCoinsAdded', { n: fmtInt(r.purchase.coins) }) : t('coinsAdded', { n: fmtInt(r.purchase.coins) }), 'ok');
-    return r.wallet;
+    await rq('POST', '/coins/request', { packageId: pkgId });
+    toast(t('coinReqSent'), 'ok');
+    if (!/^#\/coins/.test(location.hash || '')) location.hash = '#/coins';
+    return { requested: true };
   } catch (e) {
-    toast(e.message === 'demoCap' ? t('demoCap') : e.message === 'payNotConfigured' || e.message === 'payNotReady' ? t('payNotReady') : e.status === 429 ? t('slowDown') : t('buyFail'), 'err');
+    if (e.status === 409 && e.message === 'pendingExists') {
+      toast(t('coinReqPendingExists'), 'warn');
+      if (!/^#\/coins/.test(location.hash || '')) location.hash = '#/coins';
+      return { requested: true, pending: true };
+    }
+    toast(e.message === 'noPackage' ? t('buyFail') : e.status === 429 ? t('slowDown') : t('buyFail'), 'err');
     return null;
   } finally { if (btn) btn.disabled = false; }
+}
+// زر واتساب الإدارة: يشير لمسار الخادم فقط — الرقم لا يُوضع في الصفحة
+export function waAdminBtn(ctx, id, enabled) {
+  if (!enabled || !id) return '';
+  return `<a class="btn ghost block wa-admin" href="/api/contact/whatsapp?ctx=${encodeURIComponent(ctx)}&id=${encodeURIComponent(id)}" target="_blank" rel="noopener noreferrer">${esc(t('waAdmin'))}</a>`;
 }
 
 // ---------- حركة الهدية فوق البث (للمضيف وكل المشاهدين) ----------
@@ -89,7 +99,7 @@ export async function openGiftTray(stage, { liveId, onSent }) {
   tray.innerHTML = `<div class="gt-head"><b>${esc(t('sendGift'))}</b><span class="gt-bal">${coin(18)} <b dir="ltr" id="gtBal">${fmtInt(balance)}</b></span><button class="btn sm gt-recharge" id="gtRe">${esc(t('recharge'))}</button><button class="icon-btn gt-x" id="gtX" aria-label="${esc(t('close'))}">✕</button></div>
     <div class="gt-grid" role="listbox" aria-label="${esc(t('sendGift'))}">${cfg.gifts.map((g) => `<button class="gt-item tier${g.tier}" role="option" data-g="${esc(g.id)}" aria-label="${esc(giftName(g))} — ${g.coins}"><span class="gi-emoji">${esc(g.emoji)}</span><span class="gi-name">${esc(giftName(g))}</span><span class="gi-cost">${coin(12)} <b dir="ltr">${fmtInt(g.coins)}</b></span></button>`).join('')}</div>
     <div class="gt-foot"><div class="gt-qty" role="radiogroup" aria-label="${esc(t('quantity'))}">${[1, 5, 10].map((n) => `<button data-q="${n}" role="radio" dir="ltr">×${n}</button>`).join('')}</div><button class="btn primary gt-send" id="gtSend"></button></div>
-    <div class="gt-recharge-box" id="gtBox" hidden>${cfg.demo ? demoNoticeHTML() : ''}${packagesHTML(cfg)}</div>`;
+    <div class="gt-recharge-box" id="gtBox" hidden>${cfg.manualPay ? `<div class="coin-demo" role="note">${esc(t('coinReqNote'))}</div>` : (cfg.demo ? demoNoticeHTML() : '')}${packagesHTML(cfg)}</div>`;
   stage.append(tray); requestAnimationFrame(() => tray.classList.add('open'));
   const giftOf = (id) => cfg.gifts.find((g) => g.id === id);
   const paint = () => {
@@ -109,7 +119,7 @@ export async function openGiftTray(stage, { liveId, onSent }) {
     const gb = e.target.closest('[data-g]'); if (gb) { sel = gb.dataset.g; paint(); return; }
     const qb = e.target.closest('[data-q]'); if (qb) { qty = Number(qb.dataset.q); paint(); return; }
     const pb = e.target.closest('[data-pkg]');
-    if (pb) { const nw = await buyPackage(pb.dataset.pkg, pb); if (nw) { balance = nw.coins; paint(); $('#gtBox', tray).hidden = true; } }
+    if (pb) { const nw = await buyPackage(pb.dataset.pkg, pb); if (nw?.coins != null) { balance = nw.coins; paint(); } if (nw) $('#gtBox', tray).hidden = true; }
   });
   $('#gtSend', tray).onclick = async () => {
     const g = giftOf(sel); if (!g || sending) return;

@@ -828,6 +828,9 @@ html.in-call body { overflow: hidden; }
 form.paylink { margin-top: 10px; padding: 10px; background: var(--surface2); border-radius: 12px; display: grid; gap: 6px; min-width: 220px; text-align: start; }
 form.paylink .field { margin: 0; }
 .paylink-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pay-card .wa-admin { margin: 0 0 8px; }
+.coin-req-note { margin: 0 0 10px; }
+.wa-admin-set { margin: 14px 0; }
 
 /* ===== مساعد كليب كات (زر دعم عائم + لوحة محادثة) ===== */
 .sup-fab { position: fixed; z-index: 35; inset-inline-start: max(14px, calc((100vw - var(--app-w)) / 2 + 14px)); bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 14px); width: 50px; height: 50px; border-radius: 50%; border: 0; background: var(--grad); color: var(--primary-ink); display: grid; place-items: center; box-shadow: 0 8px 22px rgba(18,194,160,.35); cursor: pointer; transition: transform .2s var(--ease); }

@@ -77,3 +77,27 @@ export function normContact(v) {
 }
 const NORM = (s) => String(s || '').toLowerCase().replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
 export const norm = NORM;
+
+// رقم واتساب الإدارة فقط (لا يقبل انستغرام أو روابط عامة). أرقام عربية، 8 خانات → 965، والنتيجة https://wa.me/<digits>
+export function normAdminWhatsApp(v) {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== 'string') throw bad('bad', { field: 'adminWhatsapp' });
+  let s = v.replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x660)).replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x6F0))
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '').trim();
+  if (!s) return null;
+  const fail = () => { throw bad('bad', { field: 'adminWhatsapp' }); };
+  if (s.length > 300) fail();
+  let digits = '';
+  const wa = s.match(/^(?:https?:\/\/)?(?:www\.)?(?:wa\.me|api\.whatsapp\.com\/send)\/?\??(?:phone=)?(\+?\d{7,15})(?:\/?|$|\?)/i);
+  if (wa) digits = wa[1];
+  else {
+    const d = s.replace(/[\s\-().]/g, '');
+    if (!/^\+?\d{7,15}$/.test(d)) fail();
+    digits = d;
+  }
+  let n = digits.replace(/^\+/, '').replace(/^00/, '');
+  if (n.length === 8) n = '965' + n;
+  if (!/^\d{8,15}$/.test(n)) fail();
+  return 'https://wa.me/' + n;
+}
+

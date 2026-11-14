@@ -12,10 +12,13 @@ import rateLimit from 'express-rate-limit';
 import { config } from './config.js';
 import { q, tx, pool } from './db.js';
 import { requireUser, requireAdmin } from './auth.js';
-import { HttpError, bad, isUuid, str, ms } from './util.js';
+import { HttpError, bad, isUuid, str, ms, normContact } from './util.js';
 import { visibleLive, sendLive } from './rtc.js';
 import { provider, providers, isDemo } from './coin-payments.js';
 import { notify } from './rentals.js';
+import { mapCoinRequest } from './mappers.js';
+import { alertNewCoinRequest, emailCoinPaymentLink, COIN_PAYLINK_TEXT } from './admin-alert.js';
+import { whatsappEnabled } from './contact.js';
 
 const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const need = (v, code = 'notfound') => { if (!v) throw new HttpError(404, code); return v; };
@@ -97,7 +100,8 @@ const publicCfg = async () => ({
   packages: (await q('select * from coin_packages where active order by sort, price')).rows.map(mapPkg),
   gifts: (await catalog()).map(mapGift),
   demo: isDemo(), provider: provider().name, providerReady: provider().configured(),
-  platformShare: config.giftPlatformShare, diamondKwd: config.diamondKwd, payoutMinDiamonds: config.payoutMinDiamonds, demoDailyMax: isDemo() ? config.demoCoinsDailyMax : null
+  platformShare: config.giftPlatformShare, diamondKwd: config.diamondKwd, payoutMinDiamonds: config.payoutMinDiamonds, demoDailyMax: isDemo() ? config.demoCoinsDailyMax : null,
+  whatsappEnabled: await whatsappEnabled(), manualPay: true
 });
 
 export function buildGiftsRouter() {
@@ -109,7 +113,8 @@ export function buildGiftsRouter() {
   r.get('/wallet', requireUser, h(async (req, res) => {
     const w = await walletOf(req.user.id);
     const led = (await q("select * from coin_ledger where user_id = $1 and currency = 'coins' order by id desc limit 40", [req.user.id])).rows.map(mapLedger);
-    res.json({ ...w, demo: isDemo(), ledger: led });
+    const pending = (await q("select * from coin_pay_requests where user_id = $1 and status = 'pending' order by created_at desc", [req.user.id])).rows.map(mapCoinRequest);
+    res.json({ ...w, demo: isDemo(), ledger: led, pendingRequests: pending, whatsappEnabled: await whatsappEnabled() });
   }));
 
   // ---------------- شراء عملات ----------------
@@ -156,6 +161,77 @@ export function buildGiftsRouter() {
   r.get('/coins/return', h(async (req, res) => {
     let ok = false; try { ok = (await verifyAndFulfill(config.paymentProvider, req)).status === 'paid'; } catch {}
     res.redirect(302, `/#/coins?paid=${ok ? 1 : 0}`);
+  }));
+
+  // ---------------- طلب شراء عملات يدوياً (رابط دفع من الإدارة، بدون بوابة حقيقية) ----------------
+  r.post('/coins/request', requireUser, rl(60000, 8), h(async (req, res) => {
+    const me = req.user.id; const pkgId = str(req.body?.packageId, 24);
+    const pkg = need((await q('select * from coin_packages where id = $1 and active', [pkgId])).rows[0], 'noPackage');
+    const total = pkg.coins + pkg.bonus;
+    let row;
+    try {
+      row = (await q('insert into coin_pay_requests (user_id, package_id, coins, price) values ($1,$2,$3,$4) returning *', [me, pkg.id, total, pkg.price])).rows[0];
+    } catch (e) {
+      if (e.code === '23505') {
+        const ex = (await q("select * from coin_pay_requests where user_id = $1 and status = 'pending'", [me])).rows[0];
+        return res.status(409).json({ error: 'pendingExists', request: mapCoinRequest(ex), whatsappEnabled: await whatsappEnabled() });
+      }
+      throw e;
+    }
+    alertNewCoinRequest({ requestId: row.id, userId: me, username: req.user.username, coins: total, amount: pkg.price, packageId: pkg.id });
+    res.status(201).json({ request: mapCoinRequest(row), whatsappEnabled: await whatsappEnabled() });
+  }));
+
+  r.get('/admin/coin-requests', requireAdmin, h(async (req, res) => {
+    const st = ['pending', 'paid', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
+    const rows = (await q(`select r.*, p.username, p.name, p.avatar_url from coin_pay_requests r join profiles p on p.id = r.user_id where r.status = $1 order by r.created_at desc limit 200`, [st])).rows;
+    res.json({ status: st, requests: rows.map((x) => mapCoinRequest(x, { id: x.user_id, username: x.username, name: x.name || x.username, avatar: x.avatar_url || null })) });
+  }));
+
+  r.post('/admin/coin-requests/:id/payment-link', requireAdmin, h(async (req, res) => {
+    const id = uid(req.params.id); const b = req.body || {};
+    const rt = need((await q('select * from coin_pay_requests where id = $1', [id])).rows[0]);
+    if (rt.status !== 'pending') throw new HttpError(409, 'notPending');
+    let url; try { url = normContact(b.url); } catch (e) { e.field = 'paymentUrl'; throw e; }
+    if (!url) {
+      const row = (await q('update coin_pay_requests set payment_url = null, payment_note = null, payment_link_sent_at = null where id = $1 returning *', [id])).rows[0];
+      return res.json(mapCoinRequest(row));
+    }
+    const note = str(b.note, 200) || null;
+    const row = (await q('update coin_pay_requests set payment_url = $2, payment_note = $3, payment_link_sent_at = now() where id = $1 returning *', [id, url, note])).rows[0];
+    await notify(pool, { userId: rt.user_id, type: 'system', text: COIN_PAYLINK_TEXT });
+    emailCoinPaymentLink({ requestId: id, userId: rt.user_id, coins: rt.coins, amount: rt.price });
+    res.json(mapCoinRequest(row));
+  }));
+
+  r.post('/admin/coin-requests/:id/approve', requireAdmin, h(async (req, res) => {
+    const id = uid(req.params.id);
+    const out = await tx(async (c) => {
+      const cur = (await c.query('select * from coin_pay_requests where id = $1 for update', [id])).rows[0];
+      if (!cur) throw new HttpError(404, 'notfound');
+      if (cur.status === 'paid') return { row: cur, already: true };
+      if (cur.status !== 'pending') throw new HttpError(409, 'notPending');
+      const row = (await c.query("update coin_pay_requests set status = 'paid', decided_by = $2, decided_at = now(), credited_at = now() where id = $1 and status = 'pending' returning *", [id, req.user.id])).rows[0];
+      if (!row) throw new HttpError(409, 'notPending');
+      await credit(c, row.user_id, 'coins', row.coins, 'purchase', { refId: row.id, actorId: req.user.id, note: 'manual' });
+      await notify(c, { userId: row.user_id, type: 'system', text: `تم شحن ${row.coins} عملة إلى محفظتك ✅` });
+      return { row, already: false };
+    });
+    res.json({ request: mapCoinRequest(out.row), already: out.already, wallet: await walletOf(out.row.user_id) });
+  }));
+
+  r.post('/admin/coin-requests/:id/reject', requireAdmin, h(async (req, res) => {
+    const id = uid(req.params.id);
+    const row = await tx(async (c) => {
+      const cur = (await c.query('select * from coin_pay_requests where id = $1 for update', [id])).rows[0];
+      if (!cur) throw new HttpError(404, 'notfound');
+      if (cur.status === 'rejected') return cur;
+      if (cur.status !== 'pending') throw new HttpError(409, 'notPending');
+      const u = (await c.query("update coin_pay_requests set status = 'rejected', decided_by = $2, decided_at = now() where id = $1 and status = 'pending' returning *", [id, req.user.id])).rows[0];
+      await notify(c, { userId: u.user_id, type: 'system', text: 'رُفض طلب شراء العملات' });
+      return u;
+    });
+    res.json({ request: mapCoinRequest(row) });
   }));
 
   // ---------------- إرسال هدية في البث ----------------
@@ -223,7 +299,7 @@ export function buildGiftsRouter() {
   // ---------------- لوحة المشرف ----------------
   r.get('/admin/gifts', requireAdmin, h(async (_req, res) => {
     const tot = (await q('select coalesce(sum(coins),0) as coins, coalesce(sum(platform_coins),0) as platform, coalesce(sum(diamonds),0) as diamonds, count(*)::int as n from live_gifts')).rows[0];
-    const pur = (await q("select provider, count(*)::int as n, coalesce(sum(coins),0) as coins, coalesce(sum(price),0) as kwd from coin_purchases where status = 'paid' group by provider")).rows;
+    const pur = (await q("select provider, count(*)::int as n, coalesce(sum(coins),0) as coins, coalesce(sum(price),0) as kwd from coin_purchases where status = 'paid' group by provider union all select 'manual' as provider, count(*)::int as n, coalesce(sum(coins),0) as coins, coalesce(sum(price),0) as kwd from coin_pay_requests where status = 'paid' having count(*) > 0")).rows;
     const grants = N((await q("select coalesce(sum(delta),0) as s from coin_ledger where kind = 'grant'")).rows[0].s);
     const bal = (await q('select coalesce(sum(coins),0) as coins, coalesce(sum(diamonds),0) as diamonds from wallets')).rows[0];
     const pend = (await q("select count(*)::int as n, coalesce(sum(diamonds),0) as d, coalesce(sum(amount),0) as kwd from payout_requests where status = 'pending'")).rows[0];

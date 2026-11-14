@@ -5,13 +5,25 @@ import { pageHead } from './common.js';
 import { rentalBadge } from './dashboard.js';
 import { toast } from '../ui.js';
 import { normContact, storeErrorMessage } from '../contact-url.js';
+import { rq } from '../rtc.js';
+import { fmtInt } from '../gifts.js';
 
 export async function render(el, params, ctx) {
   if (!(await ctx.requireLogin())) return;
   if (ctx.me.role !== 'admin') { el.innerHTML = `<div class="page">${pageHead(t('admin'))}${emptyState(t('adminOnly'), '', `<a class="btn" href="#/login">${esc(t('demoAdmin'))}</a>`)}</div>`; return; }
   const d = await api.adminSummary();
   const rstatus = ['open', 'actioned', 'dismissed'].includes(params.query.get('r')) ? params.query.get('r') : 'open';
+  const cstatus = ['pending', 'paid', 'rejected'].includes(params.query.get('c')) ? params.query.get('c') : 'pending';
   const rep = api.social ? await api.adminReports(rstatus) : null;
+  let coinReqs = { requests: [] }; let waSet = { adminWhatsapp: '', whatsappEnabled: false };
+  if (api.mode !== 'local') {
+    try {
+      [coinReqs, waSet] = await Promise.all([
+        rq('GET', '/admin/coin-requests?status=' + encodeURIComponent(cstatus)),
+        rq('GET', '/admin/settings')
+      ]);
+    } catch (e) { console.warn('[admin coins]', e); }
+  }
   const maxM = Math.max(1, ...d.months.map((m) => m.total));
   const mname = (ts) => new Intl.DateTimeFormat(lang === 'ar' ? 'ar-KW-u-nu-latn' : 'en', { month: 'short' }).format(new Date(ts));
   const now = Date.now();
@@ -30,6 +42,27 @@ export async function render(el, params, ctx) {
       <section class="card"><h2>${esc(t('byPlan'))}</h2>
         <ul class="plan-break">${d.byPlan.map((p) => `<li><span>${esc(t('plan_' + p.planId))}</span><span class="muted">×${p.count}</span><b>${esc(fmtKWD(p.total))}</b></li>`).join('')}</ul></section>
     </div>
+    <section class="card wa-admin-set" id="waAdminSet">
+      <h2>${esc(t('adminWaLabel'))}</h2>
+      <form class="form" id="waForm" novalidate>
+        <label class="field"><span>${esc(t('adminWaLabel'))}</span><input name="number" type="tel" inputmode="tel" dir="ltr" autocomplete="off" maxlength="30" value="${esc(waSet.adminWhatsapp ? waSet.adminWhatsapp.replace(/^https:\/\/wa\.me\//, '') : '')}" placeholder="${esc(t('adminWaPh'))}"></label>
+        <p class="form-err" role="alert"></p>
+        <p class="muted sm">${esc(t('waAdminHint'))}</p>
+        <div class="paylink-actions"><button class="btn sm primary" type="submit">${esc(t('saveChanges'))}</button>${waSet.adminWhatsapp ? `<button class="btn sm ghost" type="submit" data-clear="1">${esc(t('payClear'))}</button>` : ''}</div>
+      </form>
+    </section>
+    <h2 class="sec-title" id="coinReqs">${esc(t('coinReqs'))}</h2>
+    <div class="seg" role="tablist">
+      ${['pending', 'paid', 'rejected'].map((x) => `<a role="tab" href="#/admin?c=${x}" class="${cstatus === x ? 'on' : ''}">${esc(x === 'pending' ? t('pending') : x === 'paid' ? t('coinPaid') : t('coinRejected'))}</a>`).join('')}
+    </div>
+    ${coinReqs.requests?.length ? `<div class="table-wrap stack"><table class="tbl"><thead><tr><th>${esc(t('owner'))}</th><th>${esc(t('rechargeCoins'))}</th><th>${esc(t('amount'))}</th><th>${esc(t('date'))}</th><th>${esc(t('status'))}</th></tr></thead><tbody>
+      ${coinReqs.requests.map((r) => `<tr>
+        <td data-label="${esc(t('owner'))}"><bdi dir="ltr">@${esc(r.user?.username)}</bdi></td>
+        <td data-label="${esc(t('rechargeCoins'))}">${esc(fmtInt(r.coins))} · ${esc(t('pkg_' + r.packageId))}</td>
+        <td data-label="${esc(t('amount'))}">${esc(fmtKWD(r.price))}</td>
+        <td data-label="${esc(t('date'))}">${esc(fmtDate(r.createdAt))}</td>
+        <td data-label="${esc(t('status'))}">${r.status === 'pending' ? `<button class="btn sm primary" data-coin-approve="${r.id}">${esc(t('coinApprove'))}</button> <button class="btn sm ghost" data-coin-reject="${r.id}">${esc(t('coinReject'))}</button>${coinPayLinkForm(r)}` : esc(r.status === 'paid' ? t('coinApproved') : t('coinRejected'))}</td>
+      </tr>`).join('')}</tbody></table></div>` : emptyState(t('noCoinReqs'))}
     <h2 class="sec-title">${icon('chart', { size: 18 })} ${esc(t('rentals'))}</h2>
     <div class="table-wrap stack"><table class="tbl"><thead><tr><th>${esc(t('store'))}</th><th>${esc(t('owner'))}</th><th>${esc(t('plan'))}</th><th>${esc(t('amount'))}</th><th>${esc(t('method'))}</th><th>${esc(t('date'))}</th><th>${esc(t('expires'))}</th><th>${esc(t('status'))}</th></tr></thead><tbody>
     ${d.rentals.map((r) => `<tr>
@@ -79,6 +112,42 @@ export async function render(el, params, ctx) {
     catch (ex) { err.textContent = ex.field === 'paymentUrl' ? t('payLinkBad') : ex.message === 'notPending' ? t('payNotPending') : storeErrorMessage(ex, t); f.querySelectorAll('button').forEach((b) => { b.disabled = false; }); }
   }));
   el.querySelectorAll('[data-cancel]').forEach((b) => b.addEventListener('click', async () => { if (!confirm(t('cancelRental') + '?')) return; await api.cancelRental(b.dataset.cancel); ctx.rerender(); }));
+  const waForm = el.querySelector('#waForm');
+  if (waForm) waForm.addEventListener('submit', async (e) => {
+    e.preventDefault(); const clear = e.submitter?.dataset.clear === '1'; const err = waForm.querySelector('.form-err'); err.textContent = '';
+    const number = clear ? '' : String(new FormData(waForm).get('number') || '').trim();
+    waForm.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    try { await rq('POST', '/admin/settings/whatsapp', { number }); toast(clear || !number ? t('adminWaCleared') : t('adminWaSaved'), 'ok'); ctx.rerender(); }
+    catch (ex) { err.textContent = ex.field === 'adminWhatsapp' || ex.message === 'bad' ? t('adminWaBad') : ex.message; waForm.querySelectorAll('button').forEach((b) => { b.disabled = false; }); }
+  });
+  el.querySelectorAll('form.coin-paylink').forEach((f) => f.addEventListener('submit', async (e) => {
+    e.preventDefault(); const clear = e.submitter?.dataset.clear === '1'; const fd = new FormData(f); const err = f.querySelector('.form-err'); err.textContent = '';
+    const url = clear ? '' : normContact(fd.get('url'));
+    if (!clear && !url) { err.textContent = t('payLinkBad'); f.querySelector('[name=url]').focus(); return; }
+    f.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    try { await rq('POST', `/admin/coin-requests/${f.dataset.request}/payment-link`, { url, note: clear ? '' : fd.get('note') }); toast(clear ? t('payLinkCleared') : t('coinPayLinkSaved'), 'ok'); ctx.rerender(); }
+    catch (ex) { err.textContent = ex.field === 'paymentUrl' ? t('payLinkBad') : ex.message === 'notPending' ? t('payNotPending') : storeErrorMessage(ex, t); f.querySelectorAll('button').forEach((b) => { b.disabled = false; }); }
+  }));
+  el.querySelectorAll('[data-coin-approve]').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try { await rq('POST', `/admin/coin-requests/${b.dataset.coinApprove}/approve`, {}); toast(t('coinApproved'), 'ok'); ctx.rerender(); }
+    catch (e) { toast(e.message, 'warn'); b.disabled = false; }
+  }));
+  el.querySelectorAll('[data-coin-reject]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm(t('coinRejectQ'))) return;
+    b.disabled = true;
+    try { await rq('POST', `/admin/coin-requests/${b.dataset.coinReject}/reject`, {}); toast(t('coinRejected'), 'ok'); ctx.rerender(); }
+    catch (e) { toast(e.message, 'warn'); b.disabled = false; }
+  }));
+}
+
+function coinPayLinkForm(r) {
+  return `<form class="paylink coin-paylink" data-request="${esc(r.id)}" novalidate>
+    <label class="field"><span>${esc(t('payLinkLabel'))}</span><input name="url" type="text" inputmode="url" dir="ltr" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="300" value="${esc(r.paymentUrl || '')}" placeholder="${esc(t('payLinkPh'))}"></label>
+    <label class="field"><span>${esc(t('payNoteLabel'))}</span><input name="note" type="text" maxlength="200" value="${esc(r.paymentNote || '')}" placeholder="${esc(t('payNotePh'))}"></label>
+    <p class="form-err" role="alert"></p>
+    <div class="paylink-actions"><button class="btn sm primary" type="submit">${esc(t('paySendUser'))}</button>${r.paymentUrl ? `<button class="btn sm ghost" type="submit" data-clear="1">${esc(t('payClear'))}</button><small class="muted">${esc(t('paySentAt', { d: fmtDate(r.paymentLinkSentAt) }))}</small>` : ''}</div>
+  </form>`;
 }
 
 function payLinkForm(r) {

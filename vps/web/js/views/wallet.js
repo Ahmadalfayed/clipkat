@@ -1,9 +1,9 @@
 // © 2026 وطن النهار — محفظة العملات (#/coins) وأرباح صانع المحتوى (#/earnings)
-import { t, timeAgo, fmtDate } from '../i18n.js';
+import { t, timeAgo, fmtDate, fmtKWD } from '../i18n.js';
 import { esc, $, toast, avatarOf, emptyState } from '../ui.js';
 import { pageHead } from './common.js';
 import { rq } from '../rtc.js';
-import { coinCfg, coin, fmtInt, kwd, packagesHTML, demoNoticeHTML, buyPackage, giftName } from '../gifts.js';
+import { coinCfg, coin, fmtInt, kwd, packagesHTML, demoNoticeHTML, buyPackage, giftName, waAdminBtn } from '../gifts.js';
 
 export async function render(el, params, ctx) {
   if (!(await ctx.requireLogin())) return;
@@ -17,15 +17,30 @@ const ledgerLabel = (x) => {
   return t('led_' + x.kind) + extra;
 };
 
+function coinPayCard(r, waOn) {
+  if (!r) return '';
+  const url = /^https?:\/\//i.test(r.paymentUrl || '') ? r.paymentUrl : '';
+  if (!url) return `<section class="card pay-card waiting" id="coinPayCard"><h2>${esc(t('coinPayTitle'))}</h2><p class="pay-amount">${esc(fmtKWD(r.price))} <small class="muted">· ${esc(fmtInt(r.coins))} ${esc(t('myCoins'))}</small></p><p class="muted"><b>${esc(t('payWaiting'))}</b><br>${esc(t('payWaitingSub'))}</p>${waAdminBtn('coins', r.id, waOn)}</section>`;
+  return `<section class="card pay-card" id="coinPayCard"><h2>${esc(t('coinPayTitle'))}</h2>
+    <p class="pay-amount">${esc(fmtKWD(r.price))} <small class="muted">· ${esc(fmtInt(r.coins))}</small></p>
+    ${r.paymentNote ? `<p class="pay-note">${esc(r.paymentNote)}</p>` : ''}
+    <a class="btn primary block lg" id="payCoinsBtn" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(t('payNow'))}</a>
+    ${waAdminBtn('coins', r.id, waOn)}
+    <p class="muted sm">${esc(t('payCoinsAfter'))}</p></section>`;
+}
+
 async function coins(el, params, ctx) {
   const [cfg, w] = await Promise.all([coinCfg(true), rq('GET', '/wallet')]);
   giftMap = new Map(cfg.gifts.map((g) => [g.id, g]));
   const paid = params.query.get('paid');
+  const pending = (w.pendingRequests || [])[0];
+  const waOn = !!(w.whatsappEnabled || cfg.whatsappEnabled);
   el.innerHTML = `<div class="page">${pageHead(t('myCoins'))}
     ${paid === '1' ? `<div class="note">${esc(t('coinsAddedShort'))}</div>` : paid === '0' ? `<div class="warn">${esc(t('payFailed'))}</div>` : ''}
     <section class="wallet-hero coins"><span class="wh-label">${esc(t('coinBalance'))}</span><b class="wh-val">${coin(34)} <span dir="ltr" id="wBal">${fmtInt(w.coins)}</span></b><small>${esc(t('coinsUse'))}</small></section>
-    ${cfg.demo ? demoNoticeHTML() : ''}
+    ${coinPayCard(pending, waOn)}
     <h2 class="sec-title">${esc(t('rechargeCoins'))}</h2>
+    <p class="muted sm coin-req-note">${esc(t('coinReqNote'))}</p>
     ${packagesHTML(cfg)}
     <p class="muted sm">${esc(t('coinsTermsShort'))} <a href="/terms">${esc(t('termsOfUse'))}</a></p>
     <h2 class="sec-title">${esc(t('coinHistory'))}</h2>
@@ -34,8 +49,8 @@ async function coins(el, params, ctx) {
   </div>`;
   el.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-pkg]'); if (!b) return;
-    const nw = await buyPackage(b.dataset.pkg, b);
-    if (nw) { $('#wBal', el).textContent = fmtInt(nw.coins); const w2 = await rq('GET', '/wallet').catch(() => null); if (w2) $('#wLed', el).innerHTML = ledgerHTML(w2.ledger); }
+    const r = await buyPackage(b.dataset.pkg, b);
+    if (r) ctx.rerender();
   });
 }
 function ledgerHTML(rows) {

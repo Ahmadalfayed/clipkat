@@ -593,3 +593,37 @@ alter table rentals drop constraint if exists rentals_payment_url_check;
 alter table rentals add constraint rentals_payment_url_check check (payment_url is null or (payment_url ~* '^https?://' and char_length(payment_url) <= 300));
 alter table rentals drop constraint if exists rentals_payment_note_check;
 alter table rentals add constraint rentals_payment_note_check check (payment_note is null or char_length(payment_note) <= 200);
+
+-- ===== رقم واتساب الإدارة (لا يُعاد في أي واجهة عامة — فقط المشرف يراه في خانة الإعداد) =====
+alter table app_settings add column if not exists admin_whatsapp text;
+alter table app_settings drop constraint if exists app_settings_admin_whatsapp_check;
+alter table app_settings add constraint app_settings_admin_whatsapp_check
+  check (admin_whatsapp is null or (admin_whatsapp ~ '^https://wa\.me/[0-9]{8,15}$' and char_length(admin_whatsapp) <= 40));
+
+-- ===== طلبات شراء العملات يدوياً (رابط دفع من المشرف ثم اعتماد وإضافة الرصيد مرة واحدة) =====
+-- مسار الشحن التجريبي (coin_purchases / provider=demo) يبقى كما هو ولا يُستخدم من الواجهة الظاهرة.
+create table if not exists coin_pay_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  package_id text not null references coin_packages(id),
+  coins int not null check (coins > 0),
+  price numeric(10,3) not null check (price >= 0),
+  currency text not null default 'KWD',
+  status text not null default 'pending' check (status in ('pending','paid','rejected','cancelled')),
+  payment_url text,
+  payment_note text,
+  payment_link_sent_at timestamptz,
+  credited_at timestamptz,
+  decided_by uuid references profiles(id),
+  decided_at timestamptz,
+  created_at timestamptz not null default now()
+);
+alter table coin_pay_requests drop constraint if exists coin_pay_requests_payment_url_check;
+alter table coin_pay_requests add constraint coin_pay_requests_payment_url_check
+  check (payment_url is null or (payment_url ~* '^https?://' and char_length(payment_url) <= 300));
+alter table coin_pay_requests drop constraint if exists coin_pay_requests_payment_note_check;
+alter table coin_pay_requests add constraint coin_pay_requests_payment_note_check
+  check (payment_note is null or char_length(payment_note) <= 200);
+create unique index if not exists coin_pay_requests_one_pending_uidx on coin_pay_requests (user_id) where status = 'pending';
+create index if not exists coin_pay_requests_user_idx on coin_pay_requests (user_id, created_at desc);
+create index if not exists coin_pay_requests_status_idx on coin_pay_requests (status, created_at desc);

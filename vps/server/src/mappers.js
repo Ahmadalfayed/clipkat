@@ -21,3 +21,10 @@ export const SOUND_COLS = `s.id, s.user_id, s.title, s.audio_url, s.duration_ms,
 export const mapSound = (x) => x && ({ id: x.id, userId: x.user_id, title: x.title, src: x.audio_url, durationMs: x.duration_ms, sourceVideoId: x.source_video_id, usesCount: x.uses_count, createdAt: ms(x.created_at) });
 export const mapComment = (c) => ({ id: c.id, videoId: c.video_id, userId: c.user_id, parentId: c.parent_id || null, text: c.text, createdAt: ms(c.created_at) });
 export const mapNotif = (n) => ({ id: n.id, userId: n.user_id, type: n.type, fromId: n.from_id, videoId: n.video_id, text: n.text, read: n.read, createdAt: ms(n.created_at) });
+
+export const mapCoinRequest = (r, user) => r && ({
+  id: r.id, userId: r.user_id, packageId: r.package_id, coins: r.coins, price: Number(r.price), currency: r.currency || 'KWD',
+  status: r.status, paymentUrl: r.payment_url || null, paymentNote: r.payment_note || null, paymentLinkSentAt: ms(r.payment_link_sent_at),
+  createdAt: ms(r.created_at), decidedAt: ms(r.decided_at),
+  ...(user ? { user } : {})
+});

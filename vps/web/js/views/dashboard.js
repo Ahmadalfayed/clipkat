@@ -4,14 +4,20 @@ import { PLANS, STORE_CATEGORIES } from '../config.js';
 import { icon, esc, $, $$, toast, openSheet, fileToDataURL, productImg, storeLogo, storeBanner, emptyState, verifiedBadge } from '../ui.js';
 import { pageHead } from './common.js';
 import { normContact, storeErrorMessage } from '../contact-url.js';
+import { waAdminBtn } from '../gifts.js';
+import { rq } from '../rtc.js';
 
 export async function render(el, params, ctx) {
   if (!(await ctx.requireLogin())) return;
   const s = await api.getMyStore();
   if (!s) { el.innerHTML = `<div class="page">${pageHead(t('dashboard'))}${emptyState(t('noStoreYet'), t('noStoreSub'), `<a class="btn primary" href="#/rent">${esc(t('rentNow'))}</a>`)}</div>`; return; }
   const st = api.storeStatus(s);
-  const products = await api.listProducts(s.id);
-  const rentals = await api.listRentals({ storeId: s.id });
+  const [products, rentals, contact] = await Promise.all([
+    api.listProducts(s.id),
+    api.listRentals({ storeId: s.id }),
+    rq('GET', '/contact/status').catch(() => ({ whatsappEnabled: false }))
+  ]);
+  const waOn = !!contact.whatsappEnabled;
   const pct = Math.min(100, Math.round((st.daysLeft / st.plan.days) * 100));
   const max = st.plan.maxProducts;
   el.innerHTML = `<div class="page">${pageHead(t('dashboard'), { extra: `<a class="icon-btn" href="#/store/${s.id}" aria-label="${esc(t('viewStore'))}">${icon('store', { size: 20 })}</a>` })}
@@ -19,7 +25,7 @@ export async function render(el, params, ctx) {
       <img class="sp-logo" src="${storeLogo(s)}" alt=""><div class="grow"><h1>${esc(s.name)} ${s.verified ? verifiedBadge(t('verified')) : ''}</h1><span class="muted sm">${esc(t('cat_' + s.category))}</span></div>
       <a class="btn sm" href="#/store/${s.id}">${esc(t('viewStore'))}</a>
     </section>
-    ${st.pending ? payCard(rentals.find((r) => r.status === 'pending')) : ''}
+    ${st.pending ? payCard(rentals.find((r) => r.status === 'pending'), waOn) : ''}
     <div class="dash-grid">
       <section class="card stat-card">
         <h2>${esc(t('rentalStatus'))}</h2>
@@ -102,13 +108,15 @@ export function rentalBadge(r) {
 }
 
 // بطاقة دفع الإيجار (رابط يدوي من الإدارة) — تظهر فقط والإيجار بانتظار التفعيل
-export function payCard(r) {
+export function payCard(r, waOn = false) {
   if (!r) return '';
   const url = /^https?:\/\//i.test(r.paymentUrl || '') ? r.paymentUrl : '';
-  if (!url) return `<section class="card pay-card waiting" id="payCard"><h2>${icon('shield', { size: 18 })} ${esc(t('payRentTitle'))}</h2><p class="pay-amount">${esc(fmtKWD(r.amount))} <small class="muted">· ${esc(t('plan_' + r.planId))}</small></p><p class="muted"><b>${esc(t('payWaiting'))}</b><br>${esc(t('payWaitingSub'))}</p></section>`;
+  const wa = waAdminBtn('rental', r.id, waOn);
+  if (!url) return `<section class="card pay-card waiting" id="payCard"><h2>${icon('shield', { size: 18 })} ${esc(t('payRentTitle'))}</h2><p class="pay-amount">${esc(fmtKWD(r.amount))} <small class="muted">· ${esc(t('plan_' + r.planId))}</small></p><p class="muted"><b>${esc(t('payWaiting'))}</b><br>${esc(t('payWaitingSub'))}</p>${wa}</section>`;
   return `<section class="card pay-card" id="payCard"><h2>${icon('shield', { size: 18 })} ${esc(t('payRentTitle'))}</h2>
     <p class="pay-amount">${esc(fmtKWD(r.amount))} <small class="muted">· ${esc(t('plan_' + r.planId))}</small></p>
     ${r.paymentNote ? `<p class="pay-note">${esc(r.paymentNote)}</p>` : ''}
     <a class="btn primary block lg" id="payRentBtn" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(t('payRent'))}</a>
+    ${wa}
     <p class="muted sm">${esc(t('payAfter'))}</p></section>`;
 }

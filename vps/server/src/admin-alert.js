@@ -99,3 +99,73 @@ export function emailPaymentLink({ rentalId, ownerId, storeId, planId, amount })
     } catch (e) { console.warn(`[mail] payment-link email failed rental=${rentalId}:`, e.responseCode || '', String(e.message || e).slice(0, 200)); }
   });
 }
+
+// ===== طلب شراء عملات: تنبيه المشرفين + بريد رابط الدفع للمشترك =====
+export const COIN_ALERT_PREFIX = 'طلب شراء عملات بانتظار الدفع';
+export function coinAlertEmail({ username, coins, amount, packageId }) {
+  const link = `${siteUrl()}/#/admin`;
+  const amt = `${Number(amount).toFixed(3)} د.ك`;
+  const subject = `${COIN_ALERT_PREFIX}: @${username}`;
+  const text = `طلب شراء عملات بانتظار رابط الدفع في كليب كات.\n\nالمشترك: @${username}\nالباقة: ${packageId}\nالعملات: ${coins}\nالمبلغ: ${amt}\n\nللمراجعة وإرسال رابط الدفع افتح لوحة الإدارة:\n${link}\n\nكليب كات`;
+  const html = layout(subject, `<p><b>طلب شراء عملات</b> بانتظار رابط الدفع في كليب كات.</p>
+<table role="presentation" cellpadding="6" style="font-size:15px"><tr><td style="color:#555">المشترك:</td><td><b dir="ltr">@${escHtml(username)}</b></td></tr>
+<tr><td style="color:#555">الباقة:</td><td><b>${escHtml(packageId)}</b></td></tr>
+<tr><td style="color:#555">العملات:</td><td><b>${escHtml(String(coins))}</b></td></tr>
+<tr><td style="color:#555">المبلغ:</td><td><b>${escHtml(amt)}</b></td></tr></table>
+${button(link, 'فتح لوحة الإدارة')}
+<p style="font-size:13px;color:#555">إذا لم يعمل الزر، انسخ هذا الرابط في المتصفح:<br><span dir="ltr" style="word-break:break-all;color:#1d4ed8">${escHtml(link)}</span></p>`);
+  return { subject, text, html };
+}
+const coinPerUser = new Map(); const coinSentTimes = [];
+function allowCoinEmail(userId, now = Date.now()) {
+  while (coinSentTimes.length && now - coinSentTimes[0] > 3600000) coinSentTimes.shift();
+  if (coinSentTimes.length >= HOUR_MAX) return false;
+  if (now - (coinPerUser.get(userId) || 0) < OWNER_GAP_MS) return false;
+  coinPerUser.set(userId, now); coinSentTimes.push(now);
+  if (coinPerUser.size > 5000) coinPerUser.clear();
+  return true;
+}
+export function alertNewCoinRequest({ requestId, userId, username, coins, amount, packageId }) {
+  setImmediate(async () => {
+    try {
+      const text = `${COIN_ALERT_PREFIX}: @${username} (${coins} عملة — ${Number(amount).toFixed(3)} د.ك)`;
+      const r = await q("insert into notifications (user_id, type, from_id, text) select id, 'system', $1, $2 from profiles where is_admin and not is_banned and id <> $1", [userId, text]);
+      console.log(`[alert] coin request id=${requestId} user=${userId} admins_notified=${r.rowCount}`);
+    } catch (e) { console.warn('[alert] coin admin notification failed:', String(e.message || e).slice(0, 200)); }
+    const to = alertEmailTo();
+    if (!to) return;
+    if (!allowCoinEmail(userId)) { console.log(`[alert] coin email skipped (rate limit) user=${userId}`); return; }
+    try {
+      const res = await sendMail({ to, ...coinAlertEmail({ username, coins, amount, packageId }) });
+      if (res.sent) console.log(`[mail] coin admin alert sent (${res.mode}${res.via ? ' via ' + res.via : ''}) to ${maskEmail(to)}${res.response ? ' — ' + String(res.response).slice(0, 120) : ''}`);
+    } catch (e) { console.warn(`[mail] coin admin alert failed to ${maskEmail(to)}:`, e.responseCode || '', String(e.message || e).slice(0, 200)); }
+  });
+}
+
+export const COIN_PAYLINK_TEXT = 'رابط دفع شراء العملات جاهز';
+export function coinPayLinkEmail({ name, username, coins, amount }) {
+  const link = `${siteUrl()}/#/coins`;
+  const amt = `${Number(amount).toFixed(3)} د.ك`;
+  const subject = 'رابط دفع شراء العملات جاهز';
+  const text = `مرحباً ${name || username}،\n\nرابط دفع شراء العملات في كليب كات جاهز.\nالعملات: ${coins}\nالمبلغ: ${amt}\n\nافتح محفظتك واضغط «ادفع الآن»:\n${link}\n\nبعد الدفع ستُضاف العملات إلى محفظتك من الإدارة.\n\nكليب كات`;
+  const html = layout(subject, `<p>مرحباً ${escHtml(name || username)}،</p><p>رابط دفع شراء العملات في كليب كات جاهز.</p>
+<table role="presentation" cellpadding="6" style="font-size:15px"><tr><td style="color:#555">العملات:</td><td><b>${escHtml(String(coins))}</b></td></tr>
+<tr><td style="color:#555">المبلغ:</td><td><b>${escHtml(amt)}</b></td></tr></table>
+${button(link, 'فتح محفظتي')}
+<p style="font-size:13px;color:#555">بعد الدفع ستُضاف العملات إلى محفظتك من الإدارة. إذا لم يعمل الزر، انسخ هذا الرابط في المتصفح:<br><span dir="ltr" style="word-break:break-all;color:#1d4ed8">${escHtml(link)}</span></p>`);
+  return { subject, text, html };
+}
+const coinPayLinkSent = new Map();
+export function emailCoinPaymentLink({ requestId, userId, coins, amount }) {
+  setImmediate(async () => {
+    try {
+      const now = Date.now();
+      if (now - (coinPayLinkSent.get(requestId) || 0) < 5 * 60000) { console.log(`[mail] coin payment-link email skipped (rate limit) request=${requestId}`); return; }
+      const u = (await q('select email, username, name, is_banned from profiles where id = $1', [userId])).rows[0];
+      if (!u || u.is_banned || !u.email) return;
+      coinPayLinkSent.set(requestId, now); if (coinPayLinkSent.size > 5000) coinPayLinkSent.clear();
+      const r = await sendMail({ to: u.email, ...coinPayLinkEmail({ name: u.name, username: u.username, coins, amount }) });
+      if (r.sent) console.log(`[mail] coin payment-link email sent (${r.mode}${r.via ? ' via ' + r.via : ''}) to ${maskEmail(u.email)} request=${requestId}${r.response ? ' — ' + String(r.response).slice(0, 120) : ''}`);
+    } catch (e) { console.warn(`[mail] coin payment-link email failed request=${requestId}:`, e.responseCode || '', String(e.message || e).slice(0, 200)); }
+  });
+}
