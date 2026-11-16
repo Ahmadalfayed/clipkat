@@ -23,15 +23,25 @@ function rtcOrigins() { try { const u = new URL(config.livekitUrl); const host =
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);       // خلف Caddy
+// نطاقات Google AdSense (بالإضافة إلى تسجيل الدخول بـ Google و LiveKit)
+const adsenseOrigins = [
+  'https://pagead2.googlesyndication.com',
+  'https://googleads.g.doubleclick.net',
+  'https://tpc.googlesyndication.com',
+  'https://*.google.com',
+  'https://*.gstatic.com',
+  'https://adservice.google.com',
+  'https://fundingchoicesmessages.google.com',
+];
 app.use(helmet({
   contentSecurityPolicy: { useDefaults: false, directives: {
     defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", "'wasm-unsafe-eval'", 'https://accounts.google.com/gsi/client'],   // wasm-unsafe-eval: فصل الخلفية (MediaPipe WebAssembly) فقط — لا يسمح بـ eval لجافاسكربت
+    scriptSrc: ["'self'", "'wasm-unsafe-eval'", 'https://accounts.google.com/gsi/client', ...adsenseOrigins],   // wasm-unsafe-eval: فصل الخلفية (MediaPipe WebAssembly) فقط — لا يسمح بـ eval لجافاسكربت
     styleSrc: ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/style'],
-    imgSrc: ["'self'", 'data:', 'blob:', 'https://www.gstatic.com', 'https://*.googleusercontent.com'],
+    imgSrc: ["'self'", 'data:', 'blob:', 'https://www.gstatic.com', 'https://*.googleusercontent.com', ...adsenseOrigins],
     mediaSrc: ["'self'", 'blob:'], fontSrc: ["'self'", 'data:'],
-    connectSrc: ["'self'", 'https://accounts.google.com/gsi/', ...rtcOrigins()],
-    frameSrc: ['https://accounts.google.com/gsi/'],
+    connectSrc: ["'self'", 'https://accounts.google.com/gsi/', ...rtcOrigins(), ...adsenseOrigins],
+    frameSrc: ['https://accounts.google.com/gsi/', ...adsenseOrigins],
     objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'none'"], formAction: ["'self'"]
   } },
   hsts: config.cookieSecure ? { maxAge: 15552000 } : false,   // HSTS فقط عند HTTPS
