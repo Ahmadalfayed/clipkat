@@ -1,0 +1,17 @@
+# جميع الحقوق محفوظة © 2026 وطن النهار
+.gradle/
+**/build/
+local.properties
+*.iml
+.idea/
+.DS_Store
+captures/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.jks
+*.keystore
+*.p12
+keystore.properties

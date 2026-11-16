@@ -1,0 +1,3 @@
+// جميع الحقوق محفوظة © 2026 وطن النهار
+rootProject.name = 'clipkat'
+include ':app'

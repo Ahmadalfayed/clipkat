@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">كليب كات</string>
+    <string name="offline_retry">إعادة المحاولة</string>
+    <string name="download_started">بدأ التحميل</string>
+    <string name="download_failed">تعذّر التحميل</string>
+    <string name="file_chooser_title">اختيار ملف</string>
+    <string name="capture_image">التقاط صورة</string>
+    <string name="capture_video">تصوير فيديو</string>
+    <string name="google_blocked_title">تسجيل الدخول بجوجل</string>
+    <string name="google_blocked_message">جوجل لا يسمح بتسجيل الدخول من داخل التطبيق. استخدم البريد وكلمة المرور، أو افتح الموقع في المتصفح.</string>
+    <string name="google_blocked_browser">فتح في المتصفح</string>
+    <string name="google_blocked_password">استخدام البريد وكلمة المرور</string>
+    <string name="permission_camera_mic">يحتاج كليب كات إلى الكاميرا والميكروفون للتسجيل والبث والمكالمات.</string>
+</resources>
