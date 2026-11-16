@@ -32,6 +32,9 @@ const adsenseOrigins = [
   'https://*.gstatic.com',
   'https://adservice.google.com',
   'https://fundingchoicesmessages.google.com',
+  'https://*.adtrafficquality.google',  // نطاقات قياس إعلانات جوجل (ليست تحت .google.com)
+  'https://*.googleadservices.com',
+  'https://*.googlesyndication.com',
 ];
 app.use(helmet({
   contentSecurityPolicy: { useDefaults: false, directives: {
