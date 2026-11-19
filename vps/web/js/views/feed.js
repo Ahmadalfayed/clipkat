@@ -42,7 +42,7 @@ export async function render(el, params, ctx) {
   const lives = rtc.enabled ? ((await rq('GET', '/live').catch(() => null))?.lives || []) : [];
   const top = mode === 'watch'
     ? `<div class="feed-top"><button class="icon-btn glass" data-act="back" aria-label="${esc(t('back'))}">${icon('back', { size: 22, cls: 'flip-rtl' })}</button><span></span><span></span></div>`
-    : `<div class="feed-top">
+    : `<div class="feed-top${ctx.me && rtc.enabled ? ' has-live' : ''}">
         <div class="feed-brand">${brandHTML(26)}</div>
         <nav class="feed-tabs" aria-label="${esc(t('home'))}">
           <a href="#/following" class="${mode === 'following' ? 'on' : ''}" ${mode === 'following' ? 'aria-current="page"' : ''}>${esc(t('following'))}</a>

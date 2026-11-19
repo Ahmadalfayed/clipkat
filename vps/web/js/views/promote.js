@@ -67,6 +67,7 @@ async function wizard(el, params, ctx) {
   const audHTML2 = () => {
     const a = s.aud; if (!a) return `<b>${esc(t('pr_audience'))}</b><p class="muted sm">…</p>`;
     if (!a.filtered) return `<b>👥 ${esc(t('pr_audience'))}</b><p class="pr-aud-num">${esc(t('pr_audAll', { b: audNum(a.total) }))}</p>`;
+    if (a.total?.lt10) return `<b>👥 ${esc(t('pr_audience'))}</b><p class="pr-aud-num">${esc(t('pr_audSmall'))}</p>`;
     return `<b>👥 ${esc(t('pr_audience'))}</b><p class="pr-aud-num">${esc(t('pr_audOf', { a: audNum(a.matched), b: audNum(a.total) }))}</p>${a.unknown?.n || a.unknown?.lt10 ? `<small class="muted">${esc(t('pr_audUnknown', { n: audNum(a.unknown) }))}</small>` : ''}`;
   };
   // الحد الأعلى للظهور مع الاستهداف = المطابقون × سقف التكرار × الأيام (المسجّلون فقط — الزوار لا يُحتسبون هنا)

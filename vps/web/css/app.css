@@ -940,3 +940,5 @@ body.sup-open .sup-fab { display: none; }
 .feed-brand { min-width: 0; overflow: hidden; }
 .feed-brand .brand { min-width: 0; }
 .feed-brand .brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* زر البث يأخذ مساحة: على الشاشات الضيقة نكتفي بشعار القطة بدل اسم مقصوص */
+@media (max-width: 440px) { .feed-top.has-live .feed-brand .brand-name { display: none; } }
