@@ -387,7 +387,7 @@ function slideHTML({ v, user, stats, products, following, store, promo }, idx) {
       <p class="cap">${linkify(v.caption)} ${v.hashtags.filter((h) => !v.caption.includes('#' + h)).map((h) => `<a href="#/tag/${encodeURIComponent(h)}" class="htag">#${esc(h)}</a>`).join(' ')}</p>
       <a class="sound" href="${v.soundId ? `#/sound/${v.soundId}` : '#/sounds'}">${icon('music', { size: 14 })}<div class="marquee"><span>${esc(v.sound || `${t('originalSound')} - ${user?.username}`)}</span></div></a>
       ${p ? `<button class="shop-card" data-a="products" aria-label="${esc(t('shopNow'))}: ${esc(p.name)}"><img src="${productImg(p)}" alt="" class="pimg"><span class="grow"><span class="shop-store">${icon('bag', { size: 13 })} ${esc(store?.name || '')}${store?.verified ? verifiedBadge(t('verified')) : ''}</span><b>${esc(p.name)}</b><span class="price">${esc(fmtKWD(p.price))}${products.length > 1 ? ` <em>+${products.length - 1}</em>` : ''}</span></span><span class="shop-cta">${esc(t('shopNow'))}</span></button>` : ''}
-      ${promo ? `<button class="promo-cta" data-a="promo-cta">${esc(t('cta_' + promo.cta))}<span aria-hidden="true">‹</span></button>` : ''}
+      ${promo ? (promo.cta === 'follow' && following ? `<button class="promo-cta done" data-a="promo-cta">✓ ${esc(t('followingBtn'))}</button>` : `<button class="promo-cta" data-a="promo-cta">${esc(t('cta_' + promo.cta))}<span aria-hidden="true">‹</span></button>`) : ''}
     </div>
     <div class="progress" aria-hidden="true"><i></i></div>
   </article>`;
