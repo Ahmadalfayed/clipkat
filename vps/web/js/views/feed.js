@@ -21,6 +21,7 @@ export async function render(el, params, ctx) {
   const tab = mode === 'following' ? 'following' : 'foryou';
   const paged = mode !== 'watch' && !!api.social;
   let videos = [], cursor = null, hasMore = false, loadingMore = false;
+  const promos = {};   // videoId → { campaignId, objective, cta, storeId } للإعلانات الممولة في «لك»
   if (mode === 'watch') {
     const v = await api.getVideo(params.args[0]);
     if (v) {
@@ -30,7 +31,7 @@ export async function render(el, params, ctx) {
     }
   } else if (paged) {
     const page = await api.listFeedPage({ tab, limit: 8 });
-    videos = page.videos; cursor = page.cursor; hasMore = page.hasMore;
+    videos = page.videos; cursor = page.cursor; hasMore = page.hasMore; Object.assign(promos, page.promos || {});
   } else {
     const raw = await api.listVideos({ tab });
     videos = Array.isArray(raw) ? raw : (raw.videos || []);
@@ -63,7 +64,7 @@ export async function render(el, params, ctx) {
     const [user, stats, products] = await Promise.all([api.getUser(v.userId), api.videoStats(v), api.productsByIds(v.productIds)]);
     const following = ctx.me ? await api.isFollowing(ctx.me.id, v.userId) : false;
     const store = products.length ? await api.getStore(products[0].storeId) : null;
-    return { v, user, stats, products, following, store };
+    return { v, user, stats, products, following, store, promo: promos[v.id] || null };
   }
   const slides = await Promise.all(videos.map(pack));
 
@@ -88,7 +89,7 @@ export async function render(el, params, ctx) {
     if (!paged || !hasMore || loadingMore) return; loadingMore = true;
     try {
       const page = await api.listFeedPage({ tab, cursor, limit: 8 });
-      cursor = page.cursor; hasMore = page.hasMore;
+      cursor = page.cursor; hasMore = page.hasMore; Object.assign(promos, page.promos || {});
       for (const v of page.videos) {
         if (byId.has(v.id)) continue;
         const s = await pack(v); byId.set(s.v.id, s);
@@ -107,8 +108,13 @@ export async function render(el, params, ctx) {
         const i = all.indexOf(sl); ensureSrc(all[i + 1]); ensureSrc(all[i - 1]);
         sl.querySelector('.mute-hint')?.classList.toggle('show', muted);
         if (ctx.me && api.social && !sl.dataset.watched) { sl.dataset.watched = '1'; api.recordWatch(sl.dataset.id); }
+        const pr = byId.get(sl.dataset.id)?.promo;
+        if (pr && !sl.dataset.imp) {
+          sl.dataset.imp = '1'; promoEvent(pr, 'impression');
+          clearTimeout(sl._pvT); sl._pvT = setTimeout(() => { if (sl.classList.contains('active') && !sl.dataset.pview) { sl.dataset.pview = '1'; promoEvent(pr, 'view'); } }, 3000);
+        }
         if (paged && i >= all.length - 2) loadMore();
-      } else { sl.classList.remove('active'); vEl.pause(); }
+      } else { sl.classList.remove('active'); vEl.pause(); clearTimeout(sl._pvT); }
     }
   }, { root: feed, threshold: [0, 0.6, 1] });
   function hookSlide(sl) {
@@ -187,7 +193,28 @@ export async function render(el, params, ctx) {
     $('.n-comment', sl).textContent = fmtNum(s.stats.comments); $('.n-share', sl).textContent = fmtNum(s.stats.shares);
   }
 
+  // أحداث الإعلان الممول (ظهور/مشاهدة/نقرة/متابعة) — لا تؤثر على تجربة المشاهد إن فشلت
+  function promoEvent(pr, kind) { rq('POST', `/promotions/${pr.campaignId}/event`, { kind }).catch(() => {}); }
+  async function promoCta(s, sl) {
+    const pr = s.promo; if (!pr) return;
+    promoEvent(pr, 'click');
+    if (pr.cta === 'visitStore' && pr.storeId) return ctx.navigate(`#/store/${pr.storeId}`);
+    if (pr.cta === 'follow') {
+      if (!(await ctx.requireLogin())) return;
+      if (!(await api.isFollowing(ctx.me.id, s.v.userId))) {
+        const on = await api.toggleFollow(s.v.userId);
+        if (api.lastFollow?.requested) { toast(t('requestSent'), 'ok'); return; }
+        if (on) { promoEvent(pr, 'follow'); $$(`.slide[data-user="${s.v.userId}"] [data-a=follow]`, feed).forEach((b) => { b.classList.add('done'); b.innerHTML = icon('check', { size: 14 }); b.setAttribute('aria-label', t('unfollow')); }); toast(`${t('followingBtn')} @${s.user.username}`, 'ok'); }
+      } else toast(`${t('followingBtn')} @${s.user.username}`);
+      const cb = $('.promo-cta', sl); if (cb) { cb.classList.add('done'); cb.textContent = '✓ ' + t('followingBtn'); }
+      return;
+    }
+    if (pr.cta === 'message') { if (!(await ctx.requireLogin())) return; return ctx.navigate(`#/chat/${s.v.userId}`); }
+    ctx.navigate(`#/profile/${s.v.userId}`);
+  }
+
   async function action(a, s, sl, btn) {
+    if (a === 'promo-cta') return promoCta(s, sl);
     if (a === 'mute') { muted = !muted; $$('video', feed).forEach((x) => (x.muted = muted)); $$('.mute-hint', feed).forEach((h) => h.classList.remove('show')); updateMuteBtns(); return; }
     if (a === 'share') return share(s, sl);
     if (a === 'comments') return openComments(s, sl);
@@ -202,6 +229,7 @@ export async function render(el, params, ctx) {
       if (api.lastFollow?.requested) { toast(t('requestSent'), 'ok'); return; }
       $$(`.slide[data-user="${s.v.userId}"] [data-a=follow]`, feed).forEach((b) => { b.classList.toggle('done', on); b.innerHTML = icon(on ? 'check' : 'plus', { size: 14 }); b.setAttribute('aria-label', on ? t('unfollow') : t('follow')); });
       toast(on ? `${t('followingBtn')} @${s.user.username}` : t('unfollow'));
+      if (on && s.promo) promoEvent(s.promo, 'follow');
     }
   }
   async function share(s, sl) {
@@ -249,12 +277,13 @@ export async function render(el, params, ctx) {
       ${s.v.soundId ? `<a class="btn block ghost" href="#/upload?sound=${s.v.soundId}" data-m="use">${esc(t('useSound'))}</a>` : (api.social ? `<button class="btn block ghost" data-m="extract">${esc(t('useSound'))}</button>` : '')}
       ${s.v.remixCount ? `<button class="btn block ghost" data-m="remixes">${esc(t('remixes'))} (${s.v.remixCount})</button>` : ''}
       ${api.social ? downloadButtonsHTML(s.v, own) : ''}
+      ${api.social && own && api.mode !== 'local' ? `<a class="btn block ghost pr-menu" href="#/promote/${s.v.id}" data-m="promote">📣 ${esc(t('promote'))}</a>` : ''}
       ${api.social && own ? `<button class="btn block ghost bad del-video" data-m="delete">${icon('trash', { size: 16 })} ${esc(t('deleteVideo'))}</button>` : ''}
       ${api.social && !own ? `<button class="btn block ghost" data-m="report">${esc(t('reportVideo'))}</button><button class="btn block ghost bad" data-m="block">${esc(t('block'))} <bdi dir="ltr">@${esc(s.user?.username)}</bdi></button>` : ''}</div>` });
     sh.body.addEventListener('click', async (e) => {
       const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return; sh.close();
       if (m === 'copy') { try { await navigator.clipboard.writeText(location.href.split('#')[0] + '#/watch/' + s.v.id); } catch {} toast(t('linkCopied')); return; }
-      if (m === 'use') return;
+      if (m === 'use' || m === 'promote') return;
       if (m === 'duet' || m === 'stitch') { if (!(await ctx.requireLogin())) return; ctx.navigate(`#/upload?${m}=${s.v.id}`); return; }
       if (m === 'remixes') { openRemixes(s.v); return; }
       if (m === 'delete') { if (own && await deleteMyVideo(s.v.id)) removeSlide(s.v.id); return; }
@@ -331,9 +360,9 @@ export async function render(el, params, ctx) {
   return () => { clearInterval(procTimer); io.disconnect(); document.removeEventListener('keydown', onKey); $$('video', feed).forEach((v) => { v.pause(); v.removeAttribute('src'); v.load(); }); };
 }
 
-function slideHTML({ v, user, stats, products, following, store }, idx) {
+function slideHTML({ v, user, stats, products, following, store, promo }, idx) {
   const p = products[0];
-  return `<article class="slide" data-id="${v.id}" data-user="${v.userId}" aria-label="@${esc(user?.username)}: ${esc(v.caption)}">
+  return `<article class="slide${promo ? ' sponsored' : ''}" data-id="${v.id}" data-user="${v.userId}" aria-label="@${esc(user?.username)}: ${esc(v.caption)}">
     <video playsinline loop muted preload="${idx < 2 ? 'auto' : 'none'}" poster="${esc(v.poster || '')}" aria-hidden="true"></video>
     <div class="shade" aria-hidden="true"></div>
     <div class="tap-layer" aria-hidden="true"></div>
@@ -352,12 +381,13 @@ function slideHTML({ v, user, stats, products, following, store }, idx) {
       <div class="disc" aria-hidden="true"><img src="${avatarOf(user)}" alt=""></div>
     </aside>
     <div class="meta">
-      <a class="uname" href="#/profile/${user?.id}"><bdi>@${esc(user?.username)}</bdi></a> <span class="when">· ${esc(timeAgo(v.createdAt))}</span>
+      <a class="uname" href="#/profile/${user?.id}"><bdi>@${esc(user?.username)}</bdi></a> ${promo ? `<span class="sp-tag">${esc(t('sponsored'))}</span>` : `<span class="when">· ${esc(timeAgo(v.createdAt))}</span>`}
       ${v.remixType ? (v.source?.available ? `<a class="remix-attr" href="#/watch/${v.source.id}">${esc(t(v.remixType === 'stitch' ? 'stitchWith' : 'duetWith'))} <bdi dir="ltr">@${esc(v.source.username)}</bdi></a>` : `<span class="remix-attr muted">${esc(t('sourceUnavailable'))}</span>`) : ''}
       ${v.remixCount ? `<button class="linkbtn remix-count" data-a="remixes">${esc(t('remixes'))} (${v.remixCount})</button>` : ''}
       <p class="cap">${linkify(v.caption)} ${v.hashtags.filter((h) => !v.caption.includes('#' + h)).map((h) => `<a href="#/tag/${encodeURIComponent(h)}" class="htag">#${esc(h)}</a>`).join(' ')}</p>
       <a class="sound" href="${v.soundId ? `#/sound/${v.soundId}` : '#/sounds'}">${icon('music', { size: 14 })}<div class="marquee"><span>${esc(v.sound || `${t('originalSound')} - ${user?.username}`)}</span></div></a>
       ${p ? `<button class="shop-card" data-a="products" aria-label="${esc(t('shopNow'))}: ${esc(p.name)}"><img src="${productImg(p)}" alt="" class="pimg"><span class="grow"><span class="shop-store">${icon('bag', { size: 13 })} ${esc(store?.name || '')}${store?.verified ? verifiedBadge(t('verified')) : ''}</span><b>${esc(p.name)}</b><span class="price">${esc(fmtKWD(p.price))}${products.length > 1 ? ` <em>+${products.length - 1}</em>` : ''}</span></span><span class="shop-cta">${esc(t('shopNow'))}</span></button>` : ''}
+      ${promo ? `<button class="promo-cta" data-a="promo-cta">${esc(t('cta_' + promo.cta))}<span aria-hidden="true">‹</span></button>` : ''}
     </div>
     <div class="progress" aria-hidden="true"><i></i></div>
   </article>`;

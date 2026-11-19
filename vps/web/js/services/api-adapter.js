@@ -108,7 +108,7 @@ export class ApiAdapter {
   async listVideos({ tab, userId, tag, savedBy, likedBy, productStoreId, soundId, cursor, limit, includeSeen } = {}) {
     const r = await this._req('GET', '/videos' + this._qs({ tab, userId, tag, savedBy, likedBy, productStoreId, soundId, cursor, limit, includeSeen: includeSeen ? '1' : undefined }));
     if (Array.isArray(r)) return this._vids(r);
-    return { videos: await this._vids(r.videos || []), cursor: r.cursor || null, hasMore: !!r.hasMore };
+    return { videos: await this._vids(r.videos || []), cursor: r.cursor || null, hasMore: !!r.hasMore, promos: r.promos || {} };
   }
   async listFeedPage(opts) { const r = await this.listVideos(opts); return Array.isArray(r) ? { videos: r, cursor: null, hasMore: false } : r; }
   async getVideo(id) {

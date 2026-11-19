@@ -14,7 +14,7 @@ const routes = {
   stores: () => import('./views/stores.js'), store: () => import('./views/stores.js'), rent: () => import('./views/stores.js'),
   golive: () => import('./views/live.js'), live: () => import('./views/live.js'),
   coins: () => import('./views/wallet.js'), earnings: () => import('./views/wallet.js'),
-  checkout: () => import('./views/checkout.js'), dashboard: () => import('./views/dashboard.js'), admin: () => import('./views/admin.js'), settings: () => import('./views/settings.js'), policy: () => import('./views/policy.js')
+  checkout: () => import('./views/checkout.js'), dashboard: () => import('./views/dashboard.js'), admin: () => import('./views/admin.js'), settings: () => import('./views/settings.js'), promote: () => import('./views/promote.js'), campaigns: () => import('./views/promote.js'), policy: () => import('./views/policy.js')
 };
 const IMMERSIVE = new Set(['feed', 'following', 'watch', 'golive', 'live']);
 const NAV = [['feed', 'home', 'home'], ['stores', 'store', 'stores'], ['upload', 'plus', 'create'], ['inbox', 'inbox', 'inbox'], ['me', 'user', 'me']];

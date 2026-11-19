@@ -52,5 +52,11 @@ export const config = {
   plusMonthlyCoins: num(env.PLUS_MONTHLY_COINS, 170),
   plusDays: num(env.PLUS_DAYS, 30),
   downloadRateMax: num(env.DOWNLOAD_RATE_MAX, 30),               // طلبات تنزيل لكل مستخدم في 10 دقائق
+  // «روّج فيديوك»: كل عملة = عدد مرات ظهور، والإعلان الممول يظهر مرة كل N مقاطع في «لك»
+  promoImpressionsPerCoin: num(env.PROMO_IMPRESSIONS_PER_COIN, 10),
+  promoEvery: Math.max(4, num(env.PROMO_EVERY, 7)),
+  promoFreqCap: Math.max(1, num(env.PROMO_FREQ_CAP, 3)),           // أقصى ظهور لنفس الحملة لنفس المشاهد خلال 24 ساعة
+  promoMinCoins: Math.max(1, num(env.PROMO_MIN_COINS, 20)),
+  promoMaxCoins: num(env.PROMO_MAX_COINS, 100000),
   publicUrl: (env.PUBLIC_URL || '').trim().replace(/\/$/, '')
 };

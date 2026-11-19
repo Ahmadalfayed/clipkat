@@ -569,7 +569,7 @@ create index if not exists video_downloads_user_idx on video_downloads (user_id,
 
 -- نوع حركة جديد في سجل العملات: دفع اشتراك بلس بالعملات (قيد واحد قابل لإعادة التطبيق)
 alter table coin_ledger drop constraint if exists coin_ledger_kind_check;
-alter table coin_ledger add constraint coin_ledger_kind_check check (kind in ('purchase','grant','gift_sent','gift_received','payout_hold','payout_refund','subscription'));
+alter table coin_ledger add constraint coin_ledger_kind_check check (kind in ('purchase','grant','gift_sent','gift_received','payout_hold','payout_refund','subscription','promo','promo_refund'));
 
 -- استعادة كلمة المرور بالبريد: رمز عشوائي يُخزَّن مُجزّأً (sha256) فقط، صالح 30 دقيقة، لمرة واحدة.
 -- kind='google' = رسالة «سجّل الدخول بـ Google» لحساب بلا كلمة مرور (بدون رمز) — تُحسب ضمن حد الطلبات لكل بريد.
@@ -627,3 +627,51 @@ alter table coin_pay_requests add constraint coin_pay_requests_payment_note_chec
 create unique index if not exists coin_pay_requests_one_pending_uidx on coin_pay_requests (user_id) where status = 'pending';
 create index if not exists coin_pay_requests_user_idx on coin_pay_requests (user_id, created_at desc);
 create index if not exists coin_pay_requests_status_idx on coin_pay_requests (status, created_at desc);
+
+-- ===== «روّج فيديوك»: حملات ترويج مدفوعة بالعملات (تُخصم عند الإرسال، تُعاد عند الرفض/الإلغاء، والمتبقي يُعاد عند الانتهاء) =====
+-- (أنواع الحركة 'promo' و'promo_refund' أُضيفت إلى coin_ledger_kind_check أعلاه — قيد واحد فقط حتى يبقى الترحيل قابلاً للتكرار)
+create table if not exists promotions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  video_id uuid references videos(id) on delete set null,
+  objective text not null check (objective in ('views','profile','follows','messages')),
+  audience text not null default 'smart' check (audience in ('smart','manual')),
+  governorates text[] not null default '{}',
+  age_min int check (age_min is null or age_min between 13 and 65),
+  age_max int check (age_max is null or age_max between 13 and 65),
+  gender text not null default 'all' check (gender in ('all','male','female')),
+  interests text[] not null default '{}',
+  budget_type text not null check (budget_type in ('daily','total')),
+  daily_coins int check (daily_coins is null or daily_coins > 0),
+  total_coins int not null check (total_coins > 0),
+  days int not null check (days between 1 and 30),
+  max_impressions int not null check (max_impressions > 0),
+  impressions int not null default 0,
+  views int not null default 0,
+  clicks int not null default 0,
+  follows int not null default 0,
+  spent_coins int not null default 0,
+  refunded_coins int not null default 0,
+  status text not null default 'pending' check (status in ('pending','active','paused','rejected','ended','cancelled')),
+  reject_reason text check (reject_reason is null or char_length(reject_reason) <= 200),
+  end_reason text,
+  start_at timestamptz,
+  end_at timestamptz,
+  decided_by uuid references profiles(id) on delete set null,
+  decided_at timestamptz,
+  ended_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (spent_coins + refunded_coins <= total_coins)
+);
+create index if not exists promotions_user_idx on promotions (user_id, created_at desc);
+create index if not exists promotions_status_idx on promotions (status, created_at desc);
+create table if not exists promotion_events (
+  id bigserial primary key,
+  promotion_id uuid not null references promotions(id) on delete cascade,
+  viewer_key text not null,
+  kind text not null check (kind in ('impression','view','click','follow')),
+  created_at timestamptz not null default now()
+);
+create index if not exists promotion_events_viewer_idx on promotion_events (promotion_id, viewer_key, kind, created_at desc);
+create index if not exists promotion_events_kind_idx on promotion_events (promotion_id, kind, created_at desc);

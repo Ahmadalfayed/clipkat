@@ -3,7 +3,7 @@
 import { icon, esc, $ } from './ui.js';
 
 const KEY = 'ck:support:v1';
-const HIDE_ON = new Set(['upload', 'golive', 'live', 'chat']);   // الاستوديو والبث والمحادثة الخاصة
+const HIDE_ON = new Set(['upload', 'golive', 'live', 'chat', 'promote']);   // الاستوديو والبث والمحادثة الخاصة
 const CHIPS = ['رفع فيديو', 'تأجير متجر', 'الدفع', 'العملات والهدايا', 'بلس', 'نسيت كلمة السر', 'تواصل مع الإدارة'];
 const GREETING = 'هلا والله 👋 أنا «مساعد كليب كات». اسألني عن رفع المقاطع، الاستوديو، البث، العملات والهدايا، بلس، أو تأجير المتاجر. وإذا تبي الإدارة اضغط «تواصل مع الإدارة».';
 const BUBBLE = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8.5 9.5h7M8.5 12.5h4.5"/></svg>';

@@ -6,7 +6,8 @@ import { rentalBadge } from './dashboard.js';
 import { toast } from '../ui.js';
 import { normContact, storeErrorMessage } from '../contact-url.js';
 import { rq } from '../rtc.js';
-import { fmtInt } from '../gifts.js';
+import { fmtInt, coin } from '../gifts.js';
+import { statusPill, statsGrid } from './promote.js';
 
 export async function render(el, params, ctx) {
   if (!(await ctx.requireLogin())) return;
@@ -16,6 +17,9 @@ export async function render(el, params, ctx) {
   const cstatus = ['pending', 'paid', 'rejected'].includes(params.query.get('c')) ? params.query.get('c') : 'pending';
   const rep = api.social ? await api.adminReports(rstatus) : null;
   let coinReqs = { requests: [] }; let waSet = { adminWhatsapp: '', whatsappEnabled: false };
+  const pstatus = ['pending', 'active', 'ended'].includes(params.query.get('p')) ? params.query.get('p') : 'pending';
+  let promos = { promotions: [], counts: {} };
+  if (api.mode !== 'local') promos = await rq('GET', '/admin/promotions?status=' + pstatus).catch((e) => { console.warn('[admin promos]', e); return promos; });
   if (api.mode !== 'local') {
     try {
       [coinReqs, waSet] = await Promise.all([
@@ -51,6 +55,23 @@ export async function render(el, params, ctx) {
         <div class="paylink-actions"><button class="btn sm primary" type="submit">${esc(t('saveChanges'))}</button>${waSet.adminWhatsapp ? `<button class="btn sm ghost" type="submit" data-clear="1">${esc(t('adminWaClear'))}</button>` : ''}</div>
       </form>
     </section>
+    <h2 class="sec-title" id="promos">📣 ${esc(t('pr_admin'))}</h2>
+    <div class="seg" role="tablist">
+      ${[['pending', 'pr_tabPending', promos.counts?.pending], ['active', 'pr_tabActive', (promos.counts?.active || 0) + (promos.counts?.paused || 0)], ['ended', 'pr_tabEnded']].map(([x, k, c]) => `<a role="tab" href="#/admin?p=${x}" class="${pstatus === x ? 'on' : ''}">${esc(t(k))}${c ? ` <span class="pill">${c}</span>` : ''}</a>`).join('')}
+    </div>
+    <div class="pr-admin">${promos.promotions?.length ? promos.promotions.map((p) => `<article class="card pr-camp">
+      <div class="pr-camp-head">${p.poster ? `<a href="#/watch/${esc(p.videoId)}"><img src="${esc(p.poster)}" alt=""></a>` : '<span class="pr-noimg">🎬</span>'}
+        <div class="grow"><b class="pr-cap">${esc(p.caption || '—')}</b><small class="muted"><bdi dir="ltr">@${esc(p.user?.username)}</bdi> · ${esc(fmtDate(p.createdAt))}</small></div>${statusPill(p)}</div>
+      <div class="pr-row"><span>${esc(t('pr_goal'))}</span><b>${esc(t('pr_obj_' + p.objective))}</b></div>
+      <div class="pr-row"><span>${esc(t('pr_budget'))}</span><b>${coin(14)} <span dir="ltr">${fmtInt(p.totalCoins)}</span> · ${esc(p.days === 1 ? t('pr_day1') : t('pr_daysN', { n: p.days }))}${p.budgetType === 'daily' ? ` · ${esc(t('pr_daily'))}` : ''}</b></div>
+      <div class="pr-row"><span>${esc(t('pr_target'))}</span><b>${esc(p.audience === 'smart' ? t('pr_audSmart') : [p.governorates.length ? p.governorates.map((g) => t('gov_' + g)).join('، ') : t('pr_govAll'), (p.ageMin || p.ageMax) ? `${p.ageMin || 13}–${p.ageMax || 65}` : '', p.gender !== 'all' ? t('pr_g_' + p.gender) : '', ...p.interests.map((x) => '#' + x)].filter(Boolean).join(' · '))}</b></div>
+      ${p.status !== 'pending' ? statsGrid(p) : ''}
+      ${p.status === 'rejected' && p.rejectReason ? `<p class="muted sm">${esc(t('pr_reason'))}: ${esc(p.rejectReason)}</p>` : ''}
+      ${p.status === 'ended' && p.endReason ? `<p class="muted sm">${esc(t('pr_end_' + p.endReason))}</p>` : ''}
+      <div class="pr-acts">${p.status === 'pending' ? `<button class="btn sm primary" data-pr="approve" data-id="${esc(p.id)}">${esc(t('pr_approve'))}</button><button class="btn sm ghost bad" data-pr="reject" data-id="${esc(p.id)}">${esc(t('pr_reject'))}</button>`
+        : p.status === 'active' ? `<button class="btn sm ghost" data-pr="pause" data-id="${esc(p.id)}">${esc(t('pr_pause'))}</button><button class="btn sm ghost bad" data-pr="stop" data-id="${esc(p.id)}">${esc(t('pr_stop'))}</button>`
+        : p.status === 'paused' ? `<button class="btn sm primary" data-pr="resume" data-id="${esc(p.id)}">${esc(t('pr_resume'))}</button><button class="btn sm ghost bad" data-pr="stop" data-id="${esc(p.id)}">${esc(t('pr_stop'))}</button>` : ''}</div>
+    </article>`).join('') : emptyState(t('pr_noAdmin'))}</div>
     <h2 class="sec-title" id="coinReqs">${esc(t('coinReqs'))}</h2>
     <div class="seg" role="tablist">
       ${['pending', 'paid', 'rejected'].map((x) => `<a role="tab" href="#/admin?c=${x}" class="${cstatus === x ? 'on' : ''}">${esc(x === 'pending' ? t('coinPending') : x === 'paid' ? t('coinPaid') : t('coinRejected'))}</a>`).join('')}
@@ -94,6 +115,13 @@ export async function render(el, params, ctx) {
     const pbox = document.createElement('div'); pbox.className = 'plus-admin'; gbox.after(pbox);
     import('./wallet.js').then((m) => m.renderPlusAdmin(pbox)).catch((e) => console.warn('[plus admin]', e));
   }
+  el.querySelectorAll('[data-pr]').forEach((b) => b.addEventListener('click', async () => {
+    const act = b.dataset.pr; let body = {};
+    if (act === 'reject') { const reason = prompt(t('pr_rejectQ'), ''); if (reason === null) return; body = { reason }; }
+    if (act === 'stop' && !confirm(t('pr_stop') + '?')) return;
+    b.disabled = true;
+    try { await rq('POST', `/admin/promotions/${b.dataset.id}/${act}`, body); toast(t('saved_ok'), 'ok'); ctx.rerender(); } catch (e) { toast(e.message, 'warn'); b.disabled = false; }
+  }));
   el.querySelectorAll('[data-res]').forEach((b) => b.addEventListener('click', async () => {
     if (b.dataset.action !== 'dismiss' && !confirm(t('a_' + b.dataset.action) + '?')) return;
     b.disabled = true; try { await api.resolveReport(b.dataset.res, b.dataset.action); toast(t('saved_ok'), 'ok'); ctx.rerender(); } catch (e) { toast(e.message, 'warn'); b.disabled = false; }

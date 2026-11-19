@@ -332,6 +332,58 @@ Object.assign(en, { forgotPw: 'Forgot password?', forgotTitle: 'Reset your passw
 Object.assign(ar, { bgTitle: 'الخلفية', bgHint: 'إضاءة جيدة وابتعد خطوة لأفضل نتيجة', bgNone: 'بدون خلفية', bgLoading: 'جارٍ تجهيز الخلفية…', bgUnsupported: 'تغيير الخلفية غير مدعوم على هذا الجهاز أو المتصفح — حدّث المتصفح أو جرّب سفاري/كروم.', bgFail: 'تعذّر تشغيل الخلفيات على هذا الجهاز، تقدر تصوّر بدون خلفية.', bgLocked: 'ما تقدر تغيّر الخلفية أثناء التسجيل' });
 Object.assign(en, { bgTitle: 'Background', bgHint: 'Good light and one step back work best', bgNone: 'No background', bgLoading: 'Preparing background…', bgUnsupported: 'Background replacement is not supported on this device or browser — update it or try Safari/Chrome.', bgFail: 'Backgrounds could not start on this device; you can record without one.', bgLocked: 'You cannot change the background while recording' });
 
+// ===== «روّج فيديوك» — حملات الترويج بالعملات (© 2026 وطن النهار) =====
+Object.assign(ar, {
+  promote: 'روّج', promoteVideo: 'روّج فيديوك', myCampaigns: 'حملاتي', sponsored: 'مُموَّل', newCampaign: 'حملة جديدة',
+  pr_stepGoal: 'الهدف', pr_stepAudience: 'الجمهور', pr_stepBudget: 'الميزانية والمدة', pr_stepReview: 'المراجعة',
+  pr_goalQ: 'شنو تبي من هالترويج؟', pr_obj_views: 'مشاهدات أكثر', pr_obj_viewsSub: 'نعرض فيديوك لناس أكثر في «لك»',
+  pr_obj_profile: 'زيارات للملف/المتجر', pr_obj_profileSub: 'زر يودّي المشاهد لملفك أو متجرك',
+  pr_obj_follows: 'متابعين أكثر', pr_obj_followsSub: 'زر متابعة مباشر على الإعلان', pr_obj_messages: 'رسائل', pr_obj_messagesSub: 'زر مراسلة يفتح محادثة معك',
+  pr_audSmart: 'ذكي (مُوصى به)', pr_audSmartSub: 'كليب كات يختار الجمهور تلقائياً حسب اهتمامات المشاهدين', pr_audManual: 'مخصّص', pr_audManualSub: 'اختر المحافظة والعمر والجنس والاهتمامات',
+  pr_gov: 'المحافظة', pr_govAll: 'كل الكويت', gov_capital: 'العاصمة', gov_hawalli: 'حولي', gov_farwaniya: 'الفروانية', gov_ahmadi: 'الأحمدي', gov_jahra: 'الجهراء', gov_mubarak: 'مبارك الكبير',
+  pr_age: 'العمر', pr_ageAll: 'كل الأعمار', pr_gender: 'الجنس', pr_g_all: 'الكل', pr_g_male: 'ذكور', pr_g_female: 'إناث', pr_interests: 'الاهتمامات', pr_noInterests: 'لا توجد وسوم بعد',
+  pr_demoNote: 'حالياً نطابق الاهتمامات فقط. المحافظة والعمر والجنس تنحفظ مع الحملة، لكنها ما تنطبق الحين لأن كليب كات ما يجمع هالبيانات عن المشاهدين.',
+  pr_budgetType: 'نوع الميزانية', pr_daily: 'يومية', pr_totalType: 'إجمالية', pr_coinsPerDay: 'عملة باليوم', pr_coinsTotal: 'عملة إجمالي', pr_days: 'المدة', pr_daysN: '{n} يوم', pr_day1: 'يوم واحد',
+  pr_estimate: 'الوصول المتوقع', pr_estimateTag: 'تقدير', pr_impr: 'ظهور', pr_estimateHow: 'كل عملة ≈ {n} ظهور. الرقم الفعلي يعتمد على عدد المشاهدين النشطين.',
+  pr_total: 'الإجمالي', pr_balance: 'رصيدك', pr_needCoins: 'رصيدك ما يكفي — اشحن عملات أولاً', pr_recharge: 'اشحن عملات', pr_min: 'أقل ميزانية {n} عملة',
+  pr_next: 'التالي', pr_prev: 'السابق', pr_submit: 'أرسل الحملة ({n} عملة)', pr_submitted: 'تم إرسال الحملة ✅ بانتظار مراجعة الإدارة', pr_reviewNote: 'تنخصم العملات الحين. إذا انرفضت الحملة ترجع كاملة لمحفظتك، واللي ما ينصرف يرجع لك تلقائياً لما تخلص.',
+  pr_pickVideo: 'اختر فيديو للترويج', pr_noVideos: 'ما عندك فيديوهات منشورة بعد', pr_privateAcc: 'حسابك خاص — خلّه عام عشان تقدر تروّج',
+  pr_st_pending: 'قيد المراجعة', pr_st_active: 'نشطة', pr_st_paused: 'متوقفة مؤقتاً', pr_st_rejected: 'مرفوضة', pr_st_ended: 'منتهية', pr_st_cancelled: 'ملغاة',
+  pr_impressions: 'مرات الظهور', pr_views: 'مشاهدات', pr_clicks: 'نقرات الزر', pr_follows: 'متابعين جدد', pr_spent: 'المصروف', pr_remaining: 'المتبقي', pr_refunded: 'المسترجع',
+  pr_endsAt: 'تنتهي', pr_noCampaigns: 'ما عندك حملات بعد', pr_noCampaignsSub: 'روّج أي فيديو من فيديوهاتك ويوصل لناس أكثر', pr_cancel: 'إلغاء الحملة', pr_cancelQ: 'تلغي الحملة وترجع لك العملات كاملة؟', pr_cancelled: 'تم الإلغاء وإرجاع العملات',
+  pr_reason: 'السبب', pr_end_budget: 'خلصت الميزانية', pr_end_endDate: 'انتهت المدة', pr_end_admin: 'أنهتها الإدارة', pr_end_videoDeleted: 'الفيديو انحذف', pr_end_byOwner: 'ألغيتها',
+  cta_watchMore: 'شاهد المزيد', cta_visitProfile: 'زيارة الملف', cta_visitStore: 'زيارة المتجر', cta_follow: 'متابعة', cta_message: 'مراسلة',
+  pr_admin: 'حملات الترويج', pr_tabPending: 'للمراجعة', pr_tabActive: 'نشطة', pr_tabEnded: 'منتهية', pr_of: '{a} من {b}', pr_approve: 'اعتماد', pr_reject: 'رفض وإرجاع العملات', pr_pause: 'إيقاف مؤقت', pr_resume: 'استئناف', pr_stop: 'إنهاء وإرجاع المتبقي',
+  pr_rejectQ: 'سبب الرفض (يوصل للمعلن):', pr_noAdmin: 'لا توجد حملات هنا', pr_target: 'الاستهداف', pr_budget: 'الميزانية', pr_goal: 'الهدف',
+  led_promo: 'حملة ترويج', led_promo_refund: 'استرجاع حملة ترويج',
+  e_objective: 'اختر الهدف', e_budget: 'الميزانية غير صحيحة', e_days: 'المدة غير صحيحة', e_age: 'العمر غير صحيح', e_insufficient: 'رصيدك ما يكفي', e_tooMany: 'عندك 5 حملات مفتوحة — انتظر حتى تخلص وحدة', e_notPublished: 'الفيديو غير منشور', e_privateAccount: 'حسابك خاص — خلّه عام عشان تقدر تروّج'
+});
+Object.assign(en, {
+  promote: 'Promote', promoteVideo: 'Promote your video', myCampaigns: 'My campaigns', sponsored: 'Sponsored', newCampaign: 'New campaign',
+  pr_stepGoal: 'Goal', pr_stepAudience: 'Audience', pr_stepBudget: 'Budget & duration', pr_stepReview: 'Review',
+  pr_goalQ: 'What do you want from this promotion?', pr_obj_views: 'More views', pr_obj_viewsSub: 'Show your video to more people in For You',
+  pr_obj_profile: 'Profile/store visits', pr_obj_profileSub: 'A button that takes viewers to your profile or store',
+  pr_obj_follows: 'More followers', pr_obj_followsSub: 'A direct follow button on the ad', pr_obj_messages: 'Messages', pr_obj_messagesSub: 'A message button that opens a chat with you',
+  pr_audSmart: 'Smart (recommended)', pr_audSmartSub: 'ClipKat picks the audience automatically from viewer interests', pr_audManual: 'Custom', pr_audManualSub: 'Choose governorate, age, gender and interests',
+  pr_gov: 'Governorate', pr_govAll: 'All Kuwait', gov_capital: 'Capital', gov_hawalli: 'Hawalli', gov_farwaniya: 'Farwaniya', gov_ahmadi: 'Ahmadi', gov_jahra: 'Jahra', gov_mubarak: 'Mubarak Al-Kabeer',
+  pr_age: 'Age', pr_ageAll: 'All ages', pr_gender: 'Gender', pr_g_all: 'All', pr_g_male: 'Male', pr_g_female: 'Female', pr_interests: 'Interests', pr_noInterests: 'No hashtags yet',
+  pr_demoNote: 'Only interests are matched for now. Governorate, age and gender are saved with the campaign but not applied, because ClipKat does not collect that data about viewers.',
+  pr_budgetType: 'Budget type', pr_daily: 'Daily', pr_totalType: 'Total', pr_coinsPerDay: 'coins / day', pr_coinsTotal: 'coins total', pr_days: 'Duration', pr_daysN: '{n} days', pr_day1: '1 day',
+  pr_estimate: 'Estimated reach', pr_estimateTag: 'Estimate', pr_impr: 'impressions', pr_estimateHow: '1 coin ≈ {n} impressions. Actual delivery depends on how many viewers are active.',
+  pr_total: 'Total', pr_balance: 'Your balance', pr_needCoins: 'Not enough coins — recharge first', pr_recharge: 'Recharge coins', pr_min: 'Minimum budget is {n} coins',
+  pr_next: 'Next', pr_prev: 'Back', pr_submit: 'Submit campaign ({n} coins)', pr_submitted: 'Campaign submitted ✅ awaiting review', pr_reviewNote: 'Coins are deducted now. If the campaign is rejected you get everything back, and any unspent coins are refunded automatically when it ends.',
+  pr_pickVideo: 'Pick a video to promote', pr_noVideos: 'You have no published videos yet', pr_privateAcc: 'Your account is private — make it public to promote',
+  pr_st_pending: 'In review', pr_st_active: 'Active', pr_st_paused: 'Paused', pr_st_rejected: 'Rejected', pr_st_ended: 'Ended', pr_st_cancelled: 'Cancelled',
+  pr_impressions: 'Impressions', pr_views: 'Views', pr_clicks: 'Button taps', pr_follows: 'New followers', pr_spent: 'Spent', pr_remaining: 'Remaining', pr_refunded: 'Refunded',
+  pr_endsAt: 'Ends', pr_noCampaigns: 'No campaigns yet', pr_noCampaignsSub: 'Promote any of your videos to reach more people', pr_cancel: 'Cancel campaign', pr_cancelQ: 'Cancel the campaign and get all coins back?', pr_cancelled: 'Cancelled and refunded',
+  pr_reason: 'Reason', pr_end_budget: 'Budget used up', pr_end_endDate: 'Duration ended', pr_end_admin: 'Ended by admin', pr_end_videoDeleted: 'Video deleted', pr_end_byOwner: 'Cancelled by you',
+  cta_watchMore: 'Watch more', cta_visitProfile: 'Visit profile', cta_visitStore: 'Visit store', cta_follow: 'Follow', cta_message: 'Message',
+  pr_admin: 'Promotions', pr_tabPending: 'Pending', pr_tabActive: 'Active', pr_tabEnded: 'Ended', pr_of: '{a} of {b}', pr_approve: 'Approve', pr_reject: 'Reject & refund', pr_pause: 'Pause', pr_resume: 'Resume', pr_stop: 'End & refund rest',
+  pr_rejectQ: 'Rejection reason (sent to the advertiser):', pr_noAdmin: 'No campaigns here', pr_target: 'Targeting', pr_budget: 'Budget', pr_goal: 'Goal',
+  led_promo: 'Promotion', led_promo_refund: 'Promotion refund',
+  e_objective: 'Pick a goal', e_budget: 'Invalid budget', e_days: 'Invalid duration', e_age: 'Invalid age', e_insufficient: 'Not enough coins', e_tooMany: 'You have 5 open campaigns — wait for one to finish', e_notPublished: 'Video is not published', e_privateAccount: 'Your account is private — make it public to promote'
+});
+
 export let lang = localStorage.getItem('ck:lang') || 'ar';
 export const brandName = () => BRAND[lang];
 

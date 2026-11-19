@@ -13,6 +13,7 @@ import { STORE_POLICY_VERSION } from './policy.js';
 import { visibleSql, notBlockedSql, isBlockedBetween, canSeeUserContent, COMMENT_POLICIES, MESSAGE_POLICIES, REPORT_REASONS } from './privacy.js';
 import { assertCanRemix, enrichRemix, notifyRemix } from './remix.js';
 import { forYou, parseCursor } from './feed.js';
+import { buildPromoteRouter, pickSponsored, viewerKey } from './promote.js';
 import { publishDue } from './publisher.js';
 import { imageUpload, videoUpload, audioUpload, sniffImage, sniffVideo, place, rm, rid, makePoster, dirs, removeVideoFiles } from './uploads.js';
 import { sniffAudio, probe, extractAudio } from './media.js';
@@ -52,6 +53,7 @@ export function buildRouter() {
   r.use(buildContactRouter());      // واتساب الإدارة (تحويل 302 — الرقم لا يُعرض للعامة)
   r.use(buildSupportRouter());      // «مساعد كليب كات» — دعم العملاء
   r.use(buildPlusRouter());         // اشتراك «كليب كات بلس» الشهري (تنزيل بدون شعار)
+  r.use(buildPromoteRouter());      // «روّج فيديوك» — حملات ترويج بالعملات
   // تنزيل المقاطع: نفس قواعد الظهور (خصوصية/حظر/حالة النشر) عبر queryVideos
   r.use(buildDownloadsRouter((viewer, id) => queryVideos(viewer, ['v.id = $1'], [id], 1).then((x) => x[0] || null)));
 
@@ -287,7 +289,9 @@ export function buildRouter() {
     const wantPage = wantRanked || req.query.cursor != null || req.query.limit != null;
     if (wantRanked) {
       const cur = parseCursor(req.query.cursor);
-      return res.json(await forYou({ viewer: req.user, cursor: cur, limit: req.query.limit, excludeSeen: req.query.includeSeen !== '1' }));
+      // إعلان ممول («مُموَّل») في «لك» فقط — لا يظهر في «أتابعه» ولا في نتائج البحث/الوسوم
+      const sponsor = tab === 'foryou' && req.query.noPromo !== '1' ? (exclude) => pickSponsored({ viewer: req.user, viewerKeyStr: viewerKey(req), excludeVideoIds: exclude }) : null;
+      return res.json(await forYou({ viewer: req.user, cursor: cur, limit: req.query.limit, excludeSeen: req.query.includeSeen !== '1', sponsor, every: config.promoEvery }));
     }
     if (wantPage) {
       const limit = Math.max(1, Math.min(Number(req.query.limit) || 12, 30));

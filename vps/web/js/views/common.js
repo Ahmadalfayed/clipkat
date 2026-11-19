@@ -29,9 +29,9 @@ export async function deleteMyVideo(id) {
   catch (e) { toast(t(e.status === 403 ? 'deleteVideoForbidden' : 'deleteVideoFail'), 'err'); return false; }
 }
 export function videoOptionsSheet(id, onDeleted) {
-  const sh = openSheet({ title: t('videoOptions'), body: `<div class="menu-list"><a class="btn block ghost" href="#/watch/${esc(id)}">${icon('play', { size: 16 })} ${esc(t('watchVideo'))}</a><button class="btn block ghost bad del-video" data-m="delete">${icon('trash', { size: 16 })} ${esc(t('deleteVideo'))}</button></div>` });
+  const sh = openSheet({ title: t('videoOptions'), body: `<div class="menu-list"><a class="btn block ghost" href="#/watch/${esc(id)}">${icon('play', { size: 16 })} ${esc(t('watchVideo'))}</a><a class="btn block ghost pr-menu" href="#/promote/${esc(id)}">📣 ${esc(t('promote'))}</a><button class="btn block ghost bad del-video" data-m="delete">${icon('trash', { size: 16 })} ${esc(t('deleteVideo'))}</button></div>` });
   sh.body.querySelector('[data-m=delete]').onclick = async () => { sh.close(); if (await deleteMyVideo(id)) onDeleted?.(id); };
-  sh.body.querySelector('a').onclick = () => sh.close();
+  sh.body.querySelectorAll('a').forEach((a) => { a.onclick = () => sh.close(); });
 }
 import { fmtNum } from '../i18n.js';
 const fmtViews = (v) => fmtNum((v.base?.views || 0) + 1);

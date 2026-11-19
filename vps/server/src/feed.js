@@ -12,7 +12,8 @@ export function parseCursor(raw) {
 }
 export const makeCursor = (id) => id;
 
-export async function forYou({ viewer, cursor = null, limit = 8, excludeSeen = true }) {
+// sponsor: دالة اختيارية تُرجع { video, promo } لإعلان ممول واحد — يُدرج بعد كل (PROMO_EVERY − 1) مقاطع عادية
+export async function forYou({ viewer, cursor = null, limit = 8, excludeSeen = true, sponsor = null, every = 7 }) {
   const n = Math.max(1, Math.min(Number(limit) || 8, 20));
   const params = [];
   const add = (v) => { params.push(v); return `$${params.length}`; };
@@ -72,8 +73,22 @@ export async function forYou({ viewer, cursor = null, limit = 8, excludeSeen = t
     order by f.score desc, f.id desc
     limit ${n + 1}`;
   const rows = (await q(sql, params)).rows;
-  const hasMore = rows.length > n;
-  const page = hasMore ? rows.slice(0, n) : rows;
+  let hasMore = rows.length > n;
+  let page = hasMore ? rows.slice(0, n) : rows;
+  let ad = null;
+  if (sponsor && page.length >= 3) {
+    try { ad = await sponsor([]); } catch (e) { console.warn('[feed] sponsor failed:', e.message); }
+    if (ad) {
+      // المقطع الممول لا يتكرر في نفس الصفحة كمقطع عادي
+      const organic = page.filter((r) => r.id !== ad.video.id);
+      const keep = Math.max(1, Math.min(organic.length, every - 1));
+      hasMore = hasMore || keep < organic.length;
+      page = organic.slice(0, keep);
+    }
+  }
   const last = page[page.length - 1];
-  return { videos: await enrichRemix(page.map((r) => mapVideo(r)), viewer), cursor: last ? makeCursor(last.id) : null, hasMore };
+  const videos = page.map((r) => mapVideo(r));
+  const promos = {};
+  if (ad) { videos.push(ad.video); promos[ad.video.id] = ad.promo; }
+  return { videos: await enrichRemix(videos, viewer), cursor: last ? makeCursor(last.id) : null, hasMore, promos };
 }
