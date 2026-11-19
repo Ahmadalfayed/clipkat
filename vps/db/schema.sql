@@ -675,3 +675,17 @@ create table if not exists promotion_events (
 );
 create index if not exists promotion_events_viewer_idx on promotion_events (promotion_id, viewer_key, kind, created_at desc);
 create index if not exists promotion_events_kind_idx on promotion_events (promotion_id, kind, created_at desc);
+
+-- ===== بيانات اختيارية لاستهداف الإعلانات (خاصة — لا تظهر في الملف العام ولا في أي واجهة عامة) =====
+-- null = غير محدد (يُعامل كمطابق في استهداف «روّج فيديوك» حتى لا تتوقف الإعلانات)
+alter table profiles add column if not exists ad_governorate text;
+alter table profiles add column if not exists ad_age_bracket text;
+alter table profiles add column if not exists ad_gender text;
+alter table profiles drop constraint if exists profiles_ad_governorate_check;
+alter table profiles add constraint profiles_ad_governorate_check check (ad_governorate is null or ad_governorate in ('capital','hawalli','farwaniya','ahmadi','jahra','mubarak'));
+alter table profiles drop constraint if exists profiles_ad_age_bracket_check;
+alter table profiles add constraint profiles_ad_age_bracket_check check (ad_age_bracket is null or ad_age_bracket in ('13-17','18-24','25-34','35-44','45+'));
+alter table profiles drop constraint if exists profiles_ad_gender_check;
+alter table profiles add constraint profiles_ad_gender_check check (ad_gender is null or ad_gender in ('male','female'));
+-- الحملات تستهدف فئات عمرية (اختيار متعدد) بدل حد أدنى/أعلى
+alter table promotions add column if not exists age_brackets text[] not null default '{}';

@@ -71,7 +71,7 @@ test('config + validation: own published video only, minimum budget, enough coin
   const daily = await create(u, { videoId: vid, budgetType: 'daily', dailyCoins: 10, days: 3, audience: 'manual', governorates: ['hawalli', 'bad'], gender: 'female', ageMin: 18, ageMax: 34, interests: ['#طبخ', 'قهوة'] });
   assert.equal(daily.status, 201, JSON.stringify(daily.body));
   const p = daily.body.promotion;
-  assert.equal(p.status, 'pending'); assert.equal(p.totalCoins, 30); assert.equal(p.maxImpressions, 300); assert.deepEqual(p.governorates, ['hawalli']); assert.deepEqual(p.interests, ['طبخ', 'قهوة']);
+  assert.equal(p.status, 'pending'); assert.equal(p.totalCoins, 30); assert.equal(p.maxImpressions, 300); assert.deepEqual(p.governorates, ['hawalli']); assert.deepEqual(p.interests, ['طبخ', 'قهوة']); assert.deepEqual(p.ageBrackets, ['18-24', '25-34']);
   assert.equal(p.estimate.impressions, 300); assert.equal(p.estimate.low, 240); assert.equal(p.estimate.high, 360);
   assert.equal(daily.body.wallet.coins, 70);
   const led = (await db.query("select * from coin_ledger where user_id = $1 and kind = 'promo'", [u.me.id])).rows;
@@ -198,6 +198,42 @@ test('end date passes → sweeper ends it and refunds the unspent coins; deleted
   // سجل العملات متوازن: −50 −40 +40 +40
   const sum = (await db.query("select coalesce(sum(delta),0)::int as s from coin_ledger where user_id = $1 and kind in ('promo','promo_refund')", [adv.me.id])).rows[0].s;
   assert.equal(sum, -10);
+});
+
+test('optional ad profile: private, validated, editable; demographic targeting filters viewers and treats unknown as a match', async () => {
+  const adm = await admin(); const adv = await user('demo'); await grant(adm, adv, 200);
+  const creator = await user('dc'); for (let i = 0; i < 8; i++) await mkVideo(creator, 'd' + i);
+  const viewer = await user('dv');
+  assert.deepEqual((await viewer.get('/me/ad-profile')).body, { governorate: null, ageBracket: null, gender: null });
+  assert.equal((await new Client().get('/me/ad-profile')).status, 401);
+  assert.equal((await viewer.req('PATCH', '/me/ad-profile', { governorate: 'dubai' })).status, 400);
+  assert.equal((await viewer.req('PATCH', '/me/ad-profile', { ageBracket: '99+' })).status, 400);
+  assert.equal((await viewer.req('PATCH', '/me/ad-profile', { gender: 'other' })).status, 400);
+  const set = await viewer.req('PATCH', '/me/ad-profile', { governorate: 'jahra', ageBracket: '25-34', gender: 'female' });
+  assert.deepEqual(set.body, { governorate: 'jahra', ageBracket: '25-34', gender: 'female' });
+  // لا تظهر في أي واجهة عامة ولا في /auth/me
+  const pub = JSON.stringify((await new Client().get(`/users/${viewer.me.id}`)).body) + JSON.stringify((await viewer.get('/auth/me')).body) + JSON.stringify((await adv.get(`/users/${viewer.me.id}`)).body);
+  assert.ok(!/jahra|25-34|female|ad_gov|adGov/.test(pub), pub);
+  const vid = await mkVideo(adv, 'استهداف');
+  const c = await create(adv, { videoId: vid, audience: 'manual', governorates: ['hawalli'], ageBrackets: ['18-24'], gender: 'male', totalCoins: 50 });
+  assert.equal(c.status, 201, JSON.stringify(c.body)); assert.deepEqual(c.body.promotion.ageBrackets, ['18-24']);
+  await adm.post(`/admin/promotions/${c.body.promotion.id}/approve`);
+  const sees = async (u) => !!(await u.get('/videos?tab=foryou&limit=8&includeSeen=1')).body.promos?.[vid];
+  assert.equal(await sees(viewer), false, 'jahra/25-34/female does not match hawalli/18-24/male');
+  await viewer.req('PATCH', '/me/ad-profile', { governorate: 'hawalli', ageBracket: '18-24' });
+  assert.equal(await sees(viewer), false, 'gender still mismatched');
+  await viewer.req('PATCH', '/me/ad-profile', { gender: null });
+  assert.equal(await sees(viewer), true, 'unknown gender counts as a match');
+  await viewer.req('PATCH', '/me/ad-profile', { gender: 'male', governorate: 'ahmadi' });
+  assert.equal(await sees(viewer), false);
+  await viewer.req('PATCH', '/me/ad-profile', { governorate: null, ageBracket: null, gender: null });
+  assert.equal(await sees(viewer), true, 'empty profile sees every campaign');
+  assert.equal(await sees(new Client('anon-demo')), true, 'anonymous visitors are unknown → match');
+  // حجم الجمهور: الكل/المطابق/غير المحدد (مقرّب)
+  const aud = (await adv.get('/promote/audience?governorates=hawalli&ages=18-24&gender=male')).body;
+  assert.equal(aud.filtered, true); assert.ok(aud.total.lt10 || aud.total.n >= aud.matched.n);
+  assert.equal((await new Client().get('/promote/audience')).status, 401);
+  await adm.post(`/admin/promotions/${c.body.promotion.id}/stop`);
 });
 
 test('schema migration stays re-runnable with promotion rows and promo ledger entries present', async () => {

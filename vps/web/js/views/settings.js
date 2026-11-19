@@ -9,7 +9,7 @@ import { pageHead, userRow } from './common.js';
 export async function render(el, params, ctx) {
   if (!(await ctx.requireLogin())) return;
   if (!api.social) { el.innerHTML = `<div class="page">${pageHead(t('settings'))}${emptyState(t('settings'), t('serverOnly'))}</div>`; return; }
-  const [st, reqs, blocks] = await Promise.all([api.getSettings(), api.listFollowRequests(), api.listBlocks()]);
+  const [st, reqs, blocks, ad] = await Promise.all([api.getSettings(), api.listFollowRequests(), api.listBlocks(), rq('GET', '/me/ad-profile').catch(() => ({}))]);
   const urow = (u, btns) => `<li class="set-user">${userRow(u)}<span class="set-btns">${btns}</span></li>`;
   el.innerHTML = `<div class="page">${pageHead(t('settings'))}
     <section class="card set-sec"><h2>${icon('shield', { size: 18 })} ${esc(t('secPrivacy'))}</h2>
@@ -25,6 +25,12 @@ export async function render(el, params, ctx) {
         <input type="checkbox" role="switch" id="sStitch" ${st.allowStitch !== false ? 'checked' : ''} aria-label="${esc(t('allowStitch'))}"></label>
       <label class="set-row"><span class="grow"><b>${esc(t('allowDownload'))}</b><small class="muted">${esc(t('allowDownloadSub'))}</small></span>
         <input type="checkbox" role="switch" id="sDownload" ${st.allowDownload !== false ? 'checked' : ''} aria-label="${esc(t('allowDownload'))}"></label>
+    </section>
+    <section class="card set-sec ad-prof" id="adProfSec"><h2>📍 ${esc(t('adProfile'))}</h2>
+      <p class="muted sm ad-note">🔒 ${esc(t('adProfileNote'))}</p>
+      <label class="set-row"><span class="grow"><b>${esc(t('adGov'))}</b></span><select id="adGov" aria-label="${esc(t('adGov'))}"><option value="">${esc(t('adUnset'))}</option>${['capital', 'hawalli', 'farwaniya', 'ahmadi', 'jahra', 'mubarak'].map((g) => `<option value="${g}" ${ad.governorate === g ? 'selected' : ''}>${esc(t('gov_' + g))}</option>`).join('')}</select></label>
+      <label class="set-row"><span class="grow"><b>${esc(t('adAge'))}</b></span><select id="adAge" aria-label="${esc(t('adAge'))}"><option value="">${esc(t('adUnset'))}</option>${['13-17', '18-24', '25-34', '35-44', '45+'].map((a) => `<option value="${a}" ${ad.ageBracket === a ? 'selected' : ''}>${esc('\u2066' + a.replace('-', '–') + '\u2069')}</option>`).join('')}</select></label>
+      <label class="set-row"><span class="grow"><b>${esc(t('adGender'))}</b></span><select id="adGender" aria-label="${esc(t('adGender'))}"><option value="">${esc(t('adNoSay'))}</option><option value="male" ${ad.gender === 'male' ? 'selected' : ''}>${esc(t('adMale'))}</option><option value="female" ${ad.gender === 'female' ? 'selected' : ''}>${esc(t('adFemale'))}</option></select></label>
     </section>
     <section class="card set-sec" id="plusSec"><h2>${icon('crown', { size: 18 })} ${esc(t('plusName'))}</h2>
       <div class="set-row"><span class="grow"><b id="plusState">…</b><small class="muted">${esc(t('plusSubTitle'))}</small></span><button class="btn sm primary" id="plusBtn">${esc(t('plusSubscribe'))}</button></div></section>
@@ -67,6 +73,11 @@ export async function render(el, params, ctx) {
   $('#sDuet', el).addEventListener('change', (e) => save({ allowDuet: e.target.checked }, e.target));
   $('#sStitch', el).addEventListener('change', (e) => save({ allowStitch: e.target.checked }, e.target));
   $('#sDownload', el).addEventListener('change', (e) => save({ allowDownload: e.target.checked }, e.target));
+  // بيانات الإعلانات الاختيارية (خاصة)
+  [['adGov', 'governorate'], ['adAge', 'ageBracket'], ['adGender', 'gender']].forEach(([id, key]) => $('#' + id, el)?.addEventListener('change', async (e) => {
+    const ctl = e.target; ctl.disabled = true;
+    try { await rq('PATCH', '/me/ad-profile', { [key]: ctl.value || null }); toast(t('adSaved'), 'ok'); } catch (er) { toast(er.message, 'warn'); } finally { ctl.disabled = false; }
+  }));
   // حالة اشتراك كليب كات بلس
   const plusDraw = async () => {
     try {

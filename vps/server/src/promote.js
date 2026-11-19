@@ -5,8 +5,8 @@
 // - الرفض أو الإلغاء قبل الاعتماد = إعادة كامل المبلغ (kind='promo_refund').
 // - الإنفاق = ceil(مرات الظهور ÷ PROMO_IMPRESSIONS_PER_COIN)، وعند انتهاء المدة أو الإيقاف النهائي يُعاد المتبقي تلقائياً.
 // - الإعلان يظهر مرة كل PROMO_EVERY مقاطع في «لك»، بحد أقصى PROMO_FREQ_CAP ظهوراً لنفس المشاهد خلال 24 ساعة.
-// - الاستهداف: الاهتمامات تُطابَق مع وسوم ما تفاعل معه المشاهد. المحافظة والعمر والجنس تُحفظ ولا تُطبَّق
-//   لأن كليب كات لا يجمع هذه البيانات عن المشاهدين (لا نُخمّنها).
+// - الاستهداف: الاهتمامات تُطابَق مع وسوم ما تفاعل معه المشاهد، والمحافظة/الفئة العمرية/الجنس تُطابَق مع
+//   بيانات اختيارية يضيفها المستخدم بنفسه في الإعدادات (خاصة، لا تظهر لأحد). الحقل الفارغ = مطابق، حتى لا تتوقف الإعلانات.
 // - لا عمولة على مبيعات المتاجر؛ الترويج خدمة منفصلة بالعملات.
 import express from 'express';
 import rateLimit from 'express-rate-limit';
@@ -27,6 +27,8 @@ const DAY = 86400000;
 export const OBJECTIVES = ['views', 'profile', 'follows', 'messages'];
 export const GOVERNORATES = ['capital', 'hawalli', 'farwaniya', 'ahmadi', 'jahra', 'mubarak'];
 const GENDERS = ['all', 'male', 'female'];
+export const AGE_BRACKETS = ['13-17', '18-24', '25-34', '35-44', '45+'];
+const BRACKET_RANGE = { '13-17': [13, 17], '18-24': [18, 24], '25-34': [25, 34], '35-44': [35, 44], '45+': [45, 200] };
 const KINDS = ['impression', 'view', 'click', 'follow'];
 function rl(windowMs, max) { return rateLimit({ windowMs, max, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => req.user?.id || req.ip, handler: (_req, res) => res.status(429).json({ error: 'slowDown' }) }); }
 const intIn = (v, min, max, code = 'bad') => { const n = Number(v); if (!Number.isInteger(n) || n < min || n > max) throw bad(code); return n; };
@@ -44,7 +46,7 @@ export function mapPromotion(p, extra = {}) {
   const total = N(p.total_coins), spent = N(p.spent_coins), refunded = N(p.refunded_coins);
   return {
     id: p.id, userId: p.user_id, videoId: p.video_id, objective: p.objective, cta: ctaFor(p.objective),
-    audience: p.audience, governorates: p.governorates || [], ageMin: p.age_min, ageMax: p.age_max, gender: p.gender, interests: p.interests || [],
+    audience: p.audience, governorates: p.governorates || [], ageBrackets: p.age_brackets || [], ageMin: p.age_min, ageMax: p.age_max, gender: p.gender, interests: p.interests || [],
     budgetType: p.budget_type, dailyCoins: p.daily_coins, totalCoins: total, days: p.days, maxImpressions: N(p.max_impressions),
     impressions: N(p.impressions), views: N(p.views), clicks: N(p.clicks), follows: N(p.follows),
     spentCoins: spent, refundedCoins: refunded, remainingCoins: Math.max(0, total - spent - refunded),
@@ -107,7 +109,8 @@ async function viewerTags(viewerId) {
 export async function pickSponsored({ viewer, viewerKeyStr, excludeVideoIds = [] }) {
   const vid = viewer?.id || null;
   const tags = await viewerTags(vid);
-  const params = [vid, viewerKeyStr, config.promoFreqCap, excludeVideoIds.filter(isUuid), tags, config.promoImpressionsPerCoin];
+  const ap = vid ? (await q('select ad_governorate, ad_age_bracket, ad_gender from profiles where id = $1', [vid])).rows[0] || {} : {};
+  const params = [vid, viewerKeyStr, config.promoFreqCap, excludeVideoIds.filter(isUuid), tags, config.promoImpressionsPerCoin, ap.ad_governorate || null, ap.ad_age_bracket || null, ap.ad_gender || null];
   const sql = `select p.id as promo_id, p.user_id as promo_user_id, p.objective as promo_objective, ${VIDEO_COLS} from promotions p join videos v on v.id = p.video_id
     where p.status = 'active' and p.start_at <= now() and p.end_at > now() and p.impressions < p.max_impressions
       and ($1::uuid is null or p.user_id <> $1::uuid)
@@ -115,6 +118,9 @@ export async function pickSponsored({ viewer, viewerKeyStr, excludeVideoIds = []
       and ${visibleSql('v.user_id', '$1::uuid')}
       and not (v.id = any($4::uuid[]))
       and (cardinality(p.interests) = 0 or cardinality($5::text[]) = 0 or p.interests && $5::text[])
+      and (cardinality(p.governorates) = 0 or $7::text is null or $7::text = any(p.governorates))
+      and (cardinality(p.age_brackets) = 0 or $8::text is null or $8::text = any(p.age_brackets))
+      and (p.gender = 'all' or $9::text is null or p.gender = $9::text)
       and (p.budget_type <> 'daily' or (select count(*) from promotion_events e where e.promotion_id = p.id and e.kind = 'impression' and e.created_at > date_trunc('day', now())) < p.daily_coins * $6)
       and (select count(*) from promotion_events e where e.promotion_id = p.id and e.viewer_key = $2 and e.kind = 'impression' and e.created_at > now() - interval '24 hours') < $3
     order by (p.impressions::float / p.max_impressions) asc, random() limit 1`;
@@ -130,7 +136,42 @@ export function buildPromoteRouter() {
 
   r.get('/promote/config', (_req, res) => res.json({
     objectives: OBJECTIVES, governorates: GOVERNORATES, perCoin: config.promoImpressionsPerCoin, minCoins: config.promoMinCoins, maxCoins: config.promoMaxCoins,
-    maxDays: 30, every: config.promoEvery, freqCap: config.promoFreqCap, demographicsApplied: false
+    maxDays: 30, every: config.promoEvery, freqCap: config.promoFreqCap, ageBrackets: AGE_BRACKETS, demographicsApplied: true, unknownMatches: true
+  }));
+  // حجم الجمهور المحتمل لاستهداف معيّن (مستخدمون مسجّلون فقط). الحقل الفارغ عند المستخدم = مطابق.
+  // الأرقام تقريبية (لأقرب 10، وأقل من 10 تظهر «<10») حتى لا يُستنتج منها بيانات شخص بعينه.
+  const round = (n) => (n < 10 ? { lt10: true, n: 0 } : { lt10: false, n: Math.round(n / 10) * 10 });
+  r.get('/promote/audience', requireUser, rl(60000, 60), h(async (req, res) => {
+    const list = (v) => String(v || '').split(',').map((x) => x.trim()).filter(Boolean);
+    let govs = list(req.query.governorates).filter((g) => GOVERNORATES.includes(g)); if (govs.length === GOVERNORATES.length) govs = [];
+    let ages = list(req.query.ages).filter((a) => AGE_BRACKETS.includes(a)); if (ages.length === AGE_BRACKETS.length) ages = [];
+    const gender = GENDERS.includes(req.query.gender) ? req.query.gender : 'all';
+    const row = (await q(`select count(*)::int as total,
+        count(*) filter (where (cardinality($1::text[]) = 0 or ad_governorate is null or ad_governorate = any($1::text[]))
+          and (cardinality($2::text[]) = 0 or ad_age_bracket is null or ad_age_bracket = any($2::text[]))
+          and ($3 = 'all' or ad_gender is null or ad_gender = $3))::int as matched,
+        count(*) filter (where (cardinality($1::text[]) = 0 or ad_governorate = any($1::text[]))
+          and (cardinality($2::text[]) = 0 or ad_age_bracket = any($2::text[]))
+          and ($3 = 'all' or ad_gender = $3))::int as exact
+      from profiles where not is_banned and not is_admin and id <> $4`, [govs, ages, gender, req.user.id])).rows[0];
+    const filtered = govs.length > 0 || ages.length > 0 || gender !== 'all';
+    res.json({ filtered, total: round(row.total), matched: round(row.matched), exact: round(row.exact), unknown: round(row.matched - row.exact), freqCap: config.promoFreqCap });
+  }));
+
+  // بياناتي الاختيارية للإعلانات — صاحب الحساب فقط يقرأها ويعدّلها
+  const adProfile = (r0) => ({ governorate: r0?.ad_governorate || null, ageBracket: r0?.ad_age_bracket || null, gender: r0?.ad_gender || null });
+  r.get('/me/ad-profile', requireUser, h(async (req, res) => res.json(adProfile((await q('select ad_governorate, ad_age_bracket, ad_gender from profiles where id = $1', [req.user.id])).rows[0]))));
+  r.patch('/me/ad-profile', requireUser, rl(60000, 30), h(async (req, res) => {
+    const b = req.body || {}; const sets = []; const vals = [];
+    const take = (key, col, allowed) => {
+      if (b[key] === undefined) return;
+      const v = b[key] === null || b[key] === '' ? null : String(b[key]);
+      if (v !== null && !allowed.includes(v)) throw bad(key);
+      vals.push(v); sets.push(`${col} = $${vals.length}`);
+    };
+    take('governorate', 'ad_governorate', GOVERNORATES); take('ageBracket', 'ad_age_bracket', AGE_BRACKETS); take('gender', 'ad_gender', ['male', 'female']);
+    if (sets.length) { vals.push(req.user.id); await q(`update profiles set ${sets.join(', ')} where id = $${vals.length}`, vals); }
+    res.json(adProfile((await q('select ad_governorate, ad_age_bracket, ad_gender from profiles where id = $1', [req.user.id])).rows[0]));
   }));
   // اهتمامات مقترحة: أكثر الوسوم استخداماً في المقاطع المنشورة
   r.get('/promote/interests', h(async (_req, res) => {
@@ -144,12 +185,18 @@ export function buildPromoteRouter() {
     const videoId = uid(b.videoId);
     const objective = OBJECTIVES.includes(b.objective) ? b.objective : null; if (!objective) throw bad('objective');
     const audience = b.audience === 'manual' ? 'manual' : 'smart';
-    let governorates = [], ageMin = null, ageMax = null, gender = 'all', interests = [];
+    let governorates = [], ageMin = null, ageMax = null, gender = 'all', interests = [], ageBrackets = [];
     if (audience === 'manual') {
       governorates = [...new Set((Array.isArray(b.governorates) ? b.governorates : []).filter((g) => GOVERNORATES.includes(g)))];
-      if (b.ageMin != null && b.ageMin !== '') ageMin = intIn(b.ageMin, 13, 65, 'age');
-      if (b.ageMax != null && b.ageMax !== '') ageMax = intIn(b.ageMax, 13, 65, 'age');
-      if (ageMin && ageMax && ageMin > ageMax) throw bad('age');
+      if (governorates.length === GOVERNORATES.length) governorates = [];
+      if (Array.isArray(b.ageBrackets)) ageBrackets = AGE_BRACKETS.filter((x) => b.ageBrackets.includes(x));
+      else if ((b.ageMin != null && b.ageMin !== '') || (b.ageMax != null && b.ageMax !== '')) {   // توافق مع الصيغة القديمة (حد أدنى/أعلى)
+        if (b.ageMin != null && b.ageMin !== '') ageMin = intIn(b.ageMin, 13, 65, 'age');
+        if (b.ageMax != null && b.ageMax !== '') ageMax = intIn(b.ageMax, 13, 65, 'age');
+        if (ageMin && ageMax && ageMin > ageMax) throw bad('age');
+        ageBrackets = AGE_BRACKETS.filter((x) => BRACKET_RANGE[x][1] >= (ageMin || 13) && BRACKET_RANGE[x][0] <= (ageMax || 200));
+      }
+      if (ageBrackets.length === AGE_BRACKETS.length) ageBrackets = [];
       gender = GENDERS.includes(b.gender) ? b.gender : 'all';
       interests = [...new Set((Array.isArray(b.interests) ? b.interests : []).map((x) => str(x, 40).replace(/^#/, '').trim()).filter(Boolean))].slice(0, 10);
     }
@@ -167,8 +214,8 @@ export function buildPromoteRouter() {
     const out = await tx(async (c) => {
       const open = (await c.query("select count(*)::int as n from promotions where user_id = $1 and status in ('pending','active','paused')", [req.user.id])).rows[0].n;
       if (open >= 5) throw bad('tooMany');
-      const p = (await c.query(`insert into promotions (user_id, video_id, objective, audience, governorates, age_min, age_max, gender, interests, budget_type, daily_coins, total_coins, days, max_impressions)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) returning *`, [req.user.id, videoId, objective, audience, governorates, ageMin, ageMax, gender, interests, budgetType, daily, total, days, maxImp])).rows[0];
+      const p = (await c.query(`insert into promotions (user_id, video_id, objective, audience, governorates, age_min, age_max, gender, interests, budget_type, daily_coins, total_coins, days, max_impressions, age_brackets)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning *`, [req.user.id, videoId, objective, audience, governorates, ageMin, ageMax, gender, interests, budgetType, daily, total, days, maxImp, ageBrackets])).rows[0];
       const balance = await debit(c, req.user.id, 'coins', total, 'promo', { refId: p.id, note: objective });
       return { p, balance };
     });

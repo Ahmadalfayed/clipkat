@@ -7,7 +7,9 @@ import { rq } from '../rtc.js';
 import { coin, fmtInt } from '../gifts.js';
 
 const OBJ_ICON = { views: '👀', profile: '🏪', follows: '➕', messages: '💬' };
-const AGES = [13, 18, 25, 35, 45, 55, 65];
+const BRACKETS = ['13-17', '18-24', '25-34', '35-44', '45+'];
+export const fmtBracket = (a) => '\u2066' + a.replace('-', '–') + '\u2069';
+const audNum = (x) => (x?.lt10 ? t('pr_lt10') : fmtInt(x?.n || 0));
 const errMsg = (e) => { const k = 'e_' + (e?.message || ''); const s = t(k); return s === k ? (e?.message || 'error') : s; };
 
 export async function render(el, params, ctx) {
@@ -36,10 +38,11 @@ async function wizard(el, params, ctx) {
     rq('GET', '/promote/interests').catch(() => ({ interests: [] })), api.getProfileFresh ? api.getProfileFresh(ctx.me.id) : ctx.me
   ]);
   if (!v || v.userId !== ctx.me.id) { el.innerHTML = `<div class="page">${pageHead(t('promoteVideo'))}${emptyState(t('notFound'))}</div>`; return; }
-  const s = { step: 0, objective: 'views', audience: 'smart', governorates: [], ageMin: '', ageMax: '', gender: 'all', interests: [], budgetType: 'daily', daily: 20, total: 100, days: 5 };
+  const s = { step: 0, objective: 'views', audience: 'smart', governorates: [], ages: [], gender: 'all', interests: [], aud: null, budgetType: 'daily', daily: 20, total: 100, days: 5 };
   const steps = ['pr_stepGoal', 'pr_stepAudience', 'pr_stepBudget', 'pr_stepReview'];
   const totalCoins = () => (s.budgetType === 'daily' ? s.daily * s.days : s.total);
-  const est = () => { const imp = totalCoins() * cfg.perCoin; return { low: Math.floor(imp * 0.8), high: Math.ceil(imp * 1.2), imp }; };
+  // تقدير الظهور: الميزانية ÷ سعر الظهور (±20٪)، ولا يتجاوز سعة الجمهور المستهدف إن كان محدداً
+  const est = () => { const imp = totalCoins() * cfg.perCoin; const cap = capacity(); return { low: Math.floor(Math.min(imp * 0.8, cap * 0.8)), high: Math.ceil(Math.min(imp * 1.2, cap)), imp }; };
   const balance = w.coins;
 
   el.innerHTML = `<div class="page pr-wiz">${pageHead(t('promoteVideo'), { extra: `<a class="btn sm ghost" href="#/campaigns">${esc(t('myCampaigns'))}</a>` })}
@@ -51,6 +54,24 @@ async function wizard(el, params, ctx) {
   </div>`;
   const body = $('#prBody', el);
 
+  const filtered = () => s.audience === 'manual' && (s.governorates.length || s.ages.length || s.gender !== 'all');
+  // حجم الجمهور المحتمل من الخادم (مقرّب) — يُحدَّث عند تغيير الاستهداف
+  let audSeq = 0;
+  async function loadAud() {
+    const my = ++audSeq;
+    const qs = s.audience === 'manual' ? `?governorates=${s.governorates.join(',')}&ages=${encodeURIComponent(s.ages.join(','))}&gender=${s.gender}` : '';
+    try { const a = await rq('GET', '/promote/audience' + qs); if (my !== audSeq) return; s.aud = a; } catch { s.aud = null; }
+    const box = $('#prAud', el); if (box) box.innerHTML = audHTML2();
+    if (s.step === 2) redrawBudget();
+  }
+  const audHTML2 = () => {
+    const a = s.aud; if (!a) return `<b>${esc(t('pr_audience'))}</b><p class="muted sm">…</p>`;
+    if (!a.filtered) return `<b>👥 ${esc(t('pr_audience'))}</b><p class="pr-aud-num">${esc(t('pr_audAll', { b: audNum(a.total) }))}</p>`;
+    return `<b>👥 ${esc(t('pr_audience'))}</b><p class="pr-aud-num">${esc(t('pr_audOf', { a: audNum(a.matched), b: audNum(a.total) }))}</p>${a.unknown?.n || a.unknown?.lt10 ? `<small class="muted">${esc(t('pr_audUnknown', { n: audNum(a.unknown) }))}</small>` : ''}`;
+  };
+  // الحد الأعلى للظهور مع الاستهداف = المطابقون × سقف التكرار × الأيام (المسجّلون فقط — الزوار لا يُحتسبون هنا)
+  const capacity = () => (filtered() && s.aud?.filtered ? (s.aud.matched.lt10 ? 9 : s.aud.matched.n) * (s.aud.freqCap || cfg.freqCap) * s.days : Infinity);
+
   const goalHTML = () => `<h2 class="sec-title">${esc(t('pr_goalQ'))}</h2><div class="pr-opts" role="radiogroup">${cfg.objectives.map((o) => `
     <button type="button" class="pr-opt ${s.objective === o ? 'on' : ''}" role="radio" aria-checked="${s.objective === o}" data-obj="${o}"><span class="pr-ic" aria-hidden="true">${OBJ_ICON[o]}</span><span class="grow"><b>${esc(t('pr_obj_' + o))}</b><small>${esc(t('pr_obj_' + o + 'Sub'))}</small></span><i class="pr-radio" aria-hidden="true"></i></button>`).join('')}</div>`;
 
@@ -61,13 +82,14 @@ async function wizard(el, params, ctx) {
       <h3>${esc(t('pr_gov'))}</h3>
       <div class="chips wrap"><button type="button" class="chip ${s.governorates.length ? '' : 'on'}" data-gov="">${esc(t('pr_govAll'))}</button>${cfg.governorates.map((g) => `<button type="button" class="chip ${s.governorates.includes(g) ? 'on' : ''}" data-gov="${g}">${esc(t('gov_' + g))}</button>`).join('')}</div>
       <h3>${esc(t('pr_age'))}</h3>
-      <div class="pr-age"><select id="ageMin" aria-label="${esc(t('pr_age'))} min"><option value="">${esc(t('pr_ageAll'))}</option>${AGES.slice(0, -1).map((a) => `<option ${String(s.ageMin) === String(a) ? 'selected' : ''}>${a}</option>`).join('')}</select><span>—</span><select id="ageMax" aria-label="${esc(t('pr_age'))} max"><option value="">${esc(t('pr_ageAll'))}</option>${AGES.slice(1).map((a) => `<option ${String(s.ageMax) === String(a) ? 'selected' : ''}>${a}</option>`).join('')}</select></div>
+      <div class="chips wrap"><button type="button" class="chip ${s.ages.length ? '' : 'on'}" data-age="">${esc(t('pr_ageAll'))}</button>${BRACKETS.map((a) => `<button type="button" class="chip ${s.ages.includes(a) ? 'on' : ''}" data-age="${a}" dir="ltr">${esc(fmtBracket(a))}</button>`).join('')}</div>
       <h3>${esc(t('pr_gender'))}</h3>
       <div class="seg">${['all', 'male', 'female'].map((g) => `<button type="button" class="${s.gender === g ? 'on' : ''}" data-gender="${g}">${esc(t('pr_g_' + g))}</button>`).join('')}</div>
       <h3>${esc(t('pr_interests'))}</h3>
       ${ints.interests.length ? `<div class="chips wrap">${ints.interests.map((x) => `<button type="button" class="chip ${s.interests.includes(x) ? 'on' : ''}" data-int="${esc(x)}">#${esc(x)}</button>`).join('')}</div>` : `<p class="muted sm">${esc(t('pr_noInterests'))}</p>`}
       <p class="note sm">${esc(t('pr_demoNote'))}</p>
-    </section>` : ''}`;
+    </section>` : ''}
+    <section class="card pr-aud" id="prAud" aria-live="polite">${audHTML2()}</section>`;
 
   const estHTML = () => {
     const e = est(); const tot = totalCoins(); const short = tot > balance; const low = tot < cfg.minCoins;
@@ -75,6 +97,8 @@ async function wizard(el, params, ctx) {
       <div class="pr-est-head"><b>${esc(t('pr_estimate'))}</b><span class="pill">${esc(t('pr_estimateTag'))}</span></div>
       <p class="pr-est-num" dir="ltr">${fmtInt(e.low)} – ${fmtInt(e.high)}</p><small class="muted">${esc(t('pr_impr'))}</small>
       <p class="muted sm">${esc(t('pr_estimateHow', { n: cfg.perCoin }))}</p>
+      ${filtered() ? `<p class="muted sm">🎯 ${esc(t('pr_capNote', { n: Number.isFinite(capacity()) ? fmtInt(capacity()) : '…', f: cfg.freqCap }))}</p><p class="muted sm">${esc(t('pr_unknownShort'))}</p>` : ''}
+      ${capacity() < e.imp ? `<div class="warn sm">${esc(t('pr_capWarn'))}</div>` : ''}
       <div class="pr-sum"><span>${esc(t('pr_total'))}</span><b>${coin(16)} <span dir="ltr">${fmtInt(tot)}</span></b></div>
       <div class="pr-sum"><span>${esc(t('pr_balance'))}</span><b>${coin(16)} <span dir="ltr">${fmtInt(balance)}</span></b></div>
       ${low ? `<p class="form-err">${esc(t('pr_min', { n: cfg.minCoins }))}</p>` : short ? `<div class="warn sm">${esc(t('pr_needCoins'))} <a class="btn sm primary" href="#/coins">${esc(t('pr_recharge'))}</a></div>` : ''}
@@ -95,13 +119,13 @@ async function wizard(el, params, ctx) {
 
   const reviewHTML = () => {
     const e = est(); const tot = totalCoins();
-    const target = s.audience === 'smart' ? t('pr_audSmart') : [s.governorates.length ? s.governorates.map((g) => t('gov_' + g)).join('، ') : t('pr_govAll'), (s.ageMin || s.ageMax) ? `${s.ageMin || 13}–${s.ageMax || 65}` : t('pr_ageAll'), t('pr_g_' + s.gender), ...s.interests.map((x) => '#' + x)].join(' · ');
+    const target = s.audience === 'smart' ? t('pr_audSmart') : [s.governorates.length ? s.governorates.map((g) => t('gov_' + g)).join('، ') : t('pr_govAll'), s.ages.length ? s.ages.map(fmtBracket).join('، ') : t('pr_ageAll'), t('pr_g_' + s.gender), ...s.interests.map((x) => '#' + x)].join(' · ');
     return `<section class="card pr-review">
       <div class="pr-row"><span>${esc(t('pr_goal'))}</span><b>${OBJ_ICON[s.objective]} ${esc(t('pr_obj_' + s.objective))}</b></div>
       <div class="pr-row"><span>${esc(t('pr_target'))}</span><b>${esc(target)}</b></div>
       <div class="pr-row"><span>${esc(t('pr_budget'))}</span><b>${s.budgetType === 'daily' ? `${fmtInt(s.daily)} ${esc(t('pr_coinsPerDay'))} × ${s.days}` : `${fmtInt(s.total)} ${esc(t('pr_coinsTotal'))}`}</b></div>
       <div class="pr-row"><span>${esc(t('pr_days'))}</span><b>${esc(s.days === 1 ? t('pr_day1') : t('pr_daysN', { n: s.days }))}</b></div>
-      <div class="pr-row"><span>${esc(t('pr_estimate'))} <span class="pill">${esc(t('pr_estimateTag'))}</span></span><b dir="ltr">${fmtInt(e.low)} – ${fmtInt(e.high)}</b></div>
+      <div class="pr-row"><span>${esc(t('pr_estimate'))} <span class="pill">${esc(t('pr_estimateTag'))}</span></span><b dir="ltr">${'\u2066' + fmtInt(e.low) + ' – ' + fmtInt(e.high) + '\u2069'}</b></div>
       <div class="pr-row total"><span>${esc(t('pr_total'))}</span><b>${coin(18)} <span dir="ltr">${fmtInt(tot)}</span></b></div>
     </section>
     <p class="muted sm">${esc(t('pr_reviewNote'))}</p>
@@ -130,16 +154,13 @@ async function wizard(el, params, ctx) {
     else if (b.dataset.aud) s.audience = b.dataset.aud;
     else if (b.dataset.gov !== undefined) { const g = b.dataset.gov; s.governorates = !g ? [] : s.governorates.includes(g) ? s.governorates.filter((x) => x !== g) : [...s.governorates, g]; if (s.governorates.length === cfg.governorates.length) s.governorates = []; }
     else if (b.dataset.gender) s.gender = b.dataset.gender;
+    else if (b.dataset.age !== undefined) { const a = b.dataset.age; s.ages = !a ? [] : s.ages.includes(a) ? s.ages.filter((x) => x !== a) : [...s.ages, a]; if (s.ages.length === BRACKETS.length) s.ages = []; }
     else if (b.dataset.int) { const x = b.dataset.int; s.interests = s.interests.includes(x) ? s.interests.filter((y) => y !== x) : [...s.interests, x].slice(0, 10); }
     else if (b.dataset.btype) s.budgetType = b.dataset.btype;
     else if (b.dataset.q) { if (s.budgetType === 'daily') s.daily = +b.dataset.q; else s.total = +b.dataset.q; const inp = $('#prAmt', el); if (inp) inp.value = b.dataset.q; redrawBudget(); return; }
     else return;
     draw();
-  });
-  body.addEventListener('change', (e) => {
-    if (e.target.id === 'ageMin') s.ageMin = e.target.value;
-    if (e.target.id === 'ageMax') s.ageMax = e.target.value;
-    if (s.ageMin && s.ageMax && +s.ageMin > +s.ageMax) { [s.ageMin, s.ageMax] = [s.ageMax, s.ageMin]; draw(); }
+    if (b.dataset.aud || b.dataset.gov !== undefined || b.dataset.gender || b.dataset.age !== undefined) loadAud();
   });
   body.addEventListener('input', (e) => {
     if (e.target.id === 'prAmt') { const n = Math.max(0, Math.min(cfg.maxCoins, Math.floor(+e.target.value || 0))); if (s.budgetType === 'daily') s.daily = n; else s.total = n; redrawBudget(); }
@@ -150,11 +171,11 @@ async function wizard(el, params, ctx) {
     if (s.step < 3) { s.step++; draw(); window.scrollTo(0, 0); return; }
     const btn = ev.currentTarget; btn.disabled = true;
     const payload = { videoId: v.id, objective: s.objective, audience: s.audience, budgetType: s.budgetType, days: s.days, dailyCoins: s.daily, totalCoins: s.total };
-    if (s.audience === 'manual') Object.assign(payload, { governorates: s.governorates, ageMin: s.ageMin || null, ageMax: s.ageMax || null, gender: s.gender, interests: s.interests });
+    if (s.audience === 'manual') Object.assign(payload, { governorates: s.governorates, ageBrackets: s.ages, gender: s.gender, interests: s.interests });
     try { await rq('POST', '/promotions', payload); toast(t('pr_submitted'), 'ok'); ctx.navigate('#/campaigns'); }
     catch (e) { toast(errMsg(e), 'warn'); btn.disabled = false; }
   };
-  draw();
+  draw(); loadAud();
 }
 
 // ---------------- حملاتي ----------------

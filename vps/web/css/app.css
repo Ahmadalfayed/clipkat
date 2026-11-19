@@ -930,3 +930,13 @@ body.sup-open .sup-fab { display: none; }
 .pr-acts { display: flex; flex-wrap: wrap; gap: 8px; } .pr-acts:empty { display: none; }
 .pr-camp .btn.bad, .pr-acts .btn.bad { color: var(--danger); }
 #promos, #coinReqs { scroll-margin-top: 76px; }
+/* بيانات الإعلانات الاختيارية + حجم الجمهور في المعالج */
+.ad-prof .ad-note { margin: -4px 0 6px; }
+.ad-prof select { max-width: 48%; }
+.pr-aud { display: flex; flex-direction: column; gap: 4px; }
+.pr-aud-num { margin: 0; font-size: 15px; font-weight: 800; }
+/* إصلاحات قديمة: عنوان الجدول المخفي في الوضع المكدّس كان يتجاوز عرض الشاشة، واسم الشعار ينقسم سطرين بجانب زر البث */
+@media (max-width: 640px) { .table-wrap.stack thead { display: none; } }
+.feed-brand { min-width: 0; overflow: hidden; }
+.feed-brand .brand { min-width: 0; }
+.feed-brand .brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
