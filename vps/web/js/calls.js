@@ -202,3 +202,13 @@ export function wireCallButtons(root, peer) {
   root.querySelectorAll('[data-call]').forEach((b) => b.addEventListener('click', () => startCall(peer, b.dataset.call)));
 }
 export const currentCall = () => call;
+// فُتح الموقع من إشعار مكالمة: نعرض شاشة الرنين (أو نرد مباشرة إن ضغط «رد» على Android)
+export async function openCallFromPush(id, act) {
+  if (!/^[0-9a-f-]{36}$/i.test(id || '')) return;
+  if (call && call.id === id) { if (act === 'accept') call.ov.querySelector('#cAccept')?.click(); return; }
+  const r = await rq('GET', `/calls/${id}`).catch(() => null);
+  if (!r?.call || r.call.status !== 'ringing' || !r.peer) { toast(t('callEnded')); return; }
+  if (call) return;
+  incoming({ call: r.call, from: r.peer });
+  if (act === 'accept') call?.ov.querySelector('#cAccept')?.click();
+}

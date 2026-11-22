@@ -6,8 +6,11 @@ import { rq } from './rtc.js';
 let cfgP = null;
 export const coinCfg = (fresh) => ((!cfgP || fresh) ? (cfgP = rq('GET', '/coins/config').catch((e) => { cfgP = null; throw e; })) : cfgP);
 export const giftName = (g) => (lang === 'ar' ? g.nameAr : g.nameEn) || g.id;
-export const fmtInt = (n) => new Intl.NumberFormat(lang === 'ar' ? 'ar-KW-u-nu-latn' : 'en').format(n || 0);
+export const fmtInt = (n) => new Intl.NumberFormat(lang === 'ar' ? 'ar-u-nu-latn' : 'en').format(n || 0);
 export const kwd = (n) => (lang === 'ar' ? `${Number(n).toFixed(3)} د.ك` : `KWD ${Number(n).toFixed(3)}`);
+// للمستخدمين خارج الكويت: ما يعادلها تقريباً بالدولار (عرض فقط — الدفع يبقى بالدينار الكويتي). 1 د.ك ≈ 3.25 $
+export const KWD_USD = 3.25;
+export const usdApprox = (n) => `<small class="usd-approx" dir="ltr" title="${esc(t('approxUsd'))}">≈ $${(Number(n) * KWD_USD).toFixed(2)}</small>`;
 // عملة كليب كات: دائرة ذهبية بشعار القطة (رسم أصلي)
 export const coin = (size = 16) => `<svg class="ck-coin" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true"><defs><radialGradient id="ckc" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff3b0"/><stop offset=".45" stop-color="#ffc83d"/><stop offset="1" stop-color="#d98a00"/></radialGradient></defs><circle cx="12" cy="12" r="11" fill="url(#ckc)" stroke="#a86400" stroke-width="1.2"/><circle cx="12" cy="12" r="7.6" fill="none" stroke="#a86400" stroke-opacity=".55" stroke-width="1"/><path d="M8.2 15.2V9.6l2 1.6h3.6l2-1.6v5.6c0 .9-1.6 1.8-3.8 1.8s-3.8-.9-3.8-1.8z" fill="#8a5200"/></svg>`;
 export const newKey = () => (crypto.randomUUID?.() || `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, '');
@@ -17,7 +20,7 @@ export function packagesHTML(cfg) {
   return `<div class="pkg-list">${cfg.packages.map((p) => `<button class="pkg" data-pkg="${esc(p.id)}">
     <span class="pkg-coins">${coin(22)} <b dir="ltr">${fmtInt(p.total)}</b></span>
     <span class="pkg-name">${esc(t('pkg_' + p.id))}${p.bonus ? ` <em>+${fmtInt(p.bonus)} ${esc(t('bonus'))}</em>` : ''}</span>
-    <span class="pkg-price">${esc(kwd(p.price))}</span></button>`).join('')}</div>`;
+    <span class="pkg-price">${esc(kwd(p.price))} ${usdApprox(p.price)}</span></button>`).join('')}</div>`;
 }
 // طلب شراء يدوي: يُنشئ طلباً بانتظار رابط الدفع من الإدارة (مسار /coins/purchase التجريبي يبقى في الخادم فقط)
 export async function buyPackage(pkgId, btn) {

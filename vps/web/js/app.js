@@ -2,7 +2,8 @@ import { api } from './services/index.js';
 import { t, setLang, lang, brandName } from './i18n.js';
 import { BRAND } from './config.js';
 import { icon, logoMark, toast, $, esc } from './ui.js';
-import { initRealtime } from './calls.js';
+import { initRealtime, openCallFromPush } from './calls.js';
+import { syncPush, registerSW } from './push.js';
 
 const routes = {
   feed: () => import('./views/feed.js'), following: () => import('./views/feed.js'), watch: () => import('./views/feed.js'),
@@ -19,7 +20,7 @@ const routes = {
 const IMMERSIVE = new Set(['feed', 'following', 'watch', 'golive', 'live']);
 const NAV = [['feed', 'home', 'home'], ['stores', 'store', 'stores'], ['upload', 'plus', 'create'], ['inbox', 'inbox', 'inbox'], ['me', 'user', 'me']];
 
-let cleanup = null, renderId = 0;
+let cleanup = null, renderId = 0, pushSynced = null;
 export const ctx = {
   me: null,
   navigate: (h) => { location.hash = h; },
@@ -82,6 +83,9 @@ async function route() {
   ctx.me = await api.currentUser();
   await renderNav(); renderDemoNotice();
   initRealtime(ctx).catch((e) => console.warn('[rtc]', e));
+  if (ctx.me && pushSynced !== ctx.me.id) { pushSynced = ctx.me.id; syncPush(ctx.me).catch(() => {}); }
+  // فتح مكالمة من إشعار الهاتف: #/feed?call=<id>&act=accept|ring
+  if (ctx.me && params.query.get('call')) { const cid = params.query.get('call'), act = params.query.get('act'); history.replaceState(null, '', '#/' + path); openCallFromPush(cid, act).catch((e) => console.warn('[call]', e)); }
   if (!loader) { view.innerHTML = `<div class="page"><p class="empty">${esc(t('notFound'))}</p></div>`; renderLegalFoot(view, false); return; }
   const mod = await loader();
   if (id !== renderId) return;
@@ -104,6 +108,9 @@ document.addEventListener('click', (e) => {
   setLang(lang); setTheme(localStorage.getItem('ck:theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
   document.title = `${brandName()} — ${t('tagline')}`;
   window.addEventListener('hashchange', route);
+  registerSW();   // عامل الخدمة للإشعارات (لا يخزّن الصفحات)
+  // ضغطة على إشعار والموقع مفتوح: ننتقل للصفحة المطلوبة
+  navigator.serviceWorker?.addEventListener('message', (e) => { const d = e.data || {}; if (d.ck === 'open' && typeof d.url === 'string' && d.url.startsWith('/#/')) { if (location.hash === d.url.slice(1)) route(); else location.hash = d.url.slice(1); } });
   await api.init();
   if (!location.hash) location.replace('#/feed');
   import('./support.js').then((m) => m.mountSupport(ctx)).catch((e) => console.warn('[support]', e));   // «مساعد كليب كات» (لا ينتظر تحميل الصفحة)

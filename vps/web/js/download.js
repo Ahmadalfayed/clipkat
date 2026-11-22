@@ -2,7 +2,7 @@
 import { t, fmtDate } from './i18n.js';
 import { icon, esc, $, toast, openSheet } from './ui.js';
 import { rq } from './rtc.js';
-import { coin, fmtInt, kwd, newKey, coinCfg, packagesHTML, buyPackage } from './gifts.js';
+import { coin, fmtInt, kwd, newKey, coinCfg, packagesHTML, buyPackage, usdApprox } from './gifts.js';
 import { confirmDialog } from './views/common.js';
 
 const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -85,7 +85,7 @@ export async function openPlusSheet({ onActive } = {}) {
     const P = p.price; const enough = (p.coins || 0) >= P.coins; const st = p.status || {};
     body.innerHTML = `<div class="plus-hero"><span class="plus-crown">${icon('crown', { size: 26 })}</span><div><b>${esc(t('plusName'))}</b><small>${esc(t('plusSubTitle'))}</small></div></div>
       ${st.active ? `<p class="plus-state on">${icon('check', { size: 16 })} ${esc(t('plusActiveUntil', { d: fmtDate(st.expiresAt) }))}</p>` : ''}
-      <div class="plus-price"><b dir="ltr">${esc(kwd(P.kwd))}</b> <span class="muted">${esc(t('plusPerMonth'))}</span> <span class="muted">· ${esc(t('plusOr'))} ·</span> ${coin(18)} <b dir="ltr">${fmtInt(P.coins)}</b></div>
+      <div class="plus-price"><b dir="ltr">${esc(kwd(P.kwd))}</b> ${usdApprox(P.kwd)} <span class="muted">${esc(t('plusPerMonth'))}</span> <span class="muted">· ${esc(t('plusOr'))} ·</span> ${coin(18)} <b dir="ltr">${fmtInt(P.coins)}</b></div>
       <ul class="plus-benefits">${['plusB1', 'plusB2', 'plusB3', 'plusB4'].map((k) => `<li>${icon('check', { size: 15 })} ${esc(t(k, { d: P.days }))}</li>`).join('')}</ul>
       <div class="plus-pay">
         <button class="btn primary block lg" data-pay="money">${esc(t(st.active ? 'plusRenew' : 'plusPayMoney', { p: kwd(P.kwd) }))}${st.active ? ` · ${esc(kwd(P.kwd))}` : ''}</button>

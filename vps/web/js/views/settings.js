@@ -5,13 +5,31 @@ import { rq } from '../rtc.js';
 import { openPlusSheet } from '../download.js';
 import { icon, esc, $, toast, avatarOf, emptyState } from '../ui.js';
 import { pageHead, userRow } from './common.js';
+import { countryOptionsHTML, searchCountries, countryName } from '../countries.js';
+import { deviceState, enablePush, disablePush, env as pushEnv } from '../push.js';
 
 export async function render(el, params, ctx) {
   if (!(await ctx.requireLogin())) return;
   if (!api.social) { el.innerHTML = `<div class="page">${pageHead(t('settings'))}${emptyState(t('settings'), t('serverOnly'))}</div>`; return; }
   const [st, reqs, blocks, ad] = await Promise.all([api.getSettings(), api.listFollowRequests(), api.listBlocks(), rq('GET', '/me/ad-profile').catch(() => ({}))]);
   const urow = (u, btns) => `<li class="set-user">${userRow(u)}<span class="set-btns">${btns}</span></li>`;
+  const steps = (k) => `<ol class="push-steps">${t(k).split('|').map((x) => `<li>${esc(x)}</li>`).join('')}</ol>`;
+  const pe = pushEnv(); const guideOpen = pe.ios ? (pe.iosBrowser === 'chrome' ? 'iosChrome' : 'iosSafari') : pe.huawei || pe.why === 'webview' ? 'huawei' : pe.android ? 'android' : '';
+  const guide = (id, body) => `<details class="push-g" data-g="${id}" ${guideOpen === id ? 'open' : ''}><summary>${esc(t('g_' + id))}</summary>${body}</details>`;
   el.innerHTML = `<div class="page">${pageHead(t('settings'))}
+    <section class="card set-sec push-sec" id="pushSec"><h2>🔔 ${esc(t('pushSec'))}</h2>
+      <p class="muted sm">${esc(t('pushIntro'))}</p>
+      <div class="push-state"><b id="pushState">…</b><small class="muted" id="pushDev"></small></div>
+      <div class="push-btns"><button class="btn primary" id="pushOnBtn" hidden>${esc(t('pushEnable'))}</button><button class="btn ghost sm" id="pushOffBtn" hidden>${esc(t('pushDisable'))}</button><button class="btn ghost sm" id="pushTestBtn" hidden>${esc(t('pushTest'))}</button></div>
+      <h3 class="push-h">${esc(t('pushTypes'))}</h3>
+      ${['messages', 'videos', 'live', 'calls'].map((k) => `<label class="set-row"><span class="grow"><b>${esc(t('pushT_' + k))}</b><small class="muted">${esc(t('pushT_' + k + 'Sub'))}</small></span><input type="checkbox" role="switch" data-pp="${k}" checked aria-label="${esc(t('pushT_' + k))}"></label>`).join('')}
+      <h3 class="push-h">${esc(t('pushGuide'))}</h3>
+      ${guide('iosSafari', steps('g_iosSafari_s') + `<p class="muted sm">${esc(t('g_iosNote'))}</p>`)}
+      ${guide('iosChrome', steps('g_iosChrome_s') + `<p class="muted sm">${esc(t('g_iosNote'))}</p>`)}
+      ${guide('android', steps('g_android_s'))}
+      ${guide('huawei', `<p class="muted sm">${esc(t('g_huawei_t'))}</p>`)}
+      <p class="muted sm push-bg">${esc(t('pushBg'))}</p>
+    </section>
     <section class="card set-sec"><h2>${icon('shield', { size: 18 })} ${esc(t('secPrivacy'))}</h2>
       <label class="set-row"><span class="grow"><b>${esc(t('privateAccount'))}</b><small class="muted">${esc(t('privateAccountSub'))}</small></span>
         <input type="checkbox" role="switch" id="sPrivate" ${st.isPrivate ? 'checked' : ''} aria-label="${esc(t('privateAccount'))}"></label>
@@ -28,7 +46,9 @@ export async function render(el, params, ctx) {
     </section>
     <section class="card set-sec ad-prof" id="adProfSec"><h2>📍 ${esc(t('adProfile'))}</h2>
       <p class="muted sm ad-note">🔒 ${esc(t('adProfileNote'))}</p>
-      <label class="set-row"><span class="grow"><b>${esc(t('adGov'))}</b></span><select id="adGov" aria-label="${esc(t('adGov'))}"><option value="">${esc(t('adUnset'))}</option>${['capital', 'hawalli', 'farwaniya', 'ahmadi', 'jahra', 'mubarak'].map((g) => `<option value="${g}" ${ad.governorate === g ? 'selected' : ''}>${esc(t('gov_' + g))}</option>`).join('')}</select></label>
+      <label class="set-row"><span class="grow"><b>${esc(t('adCountry'))}</b></span><select id="adCountry" aria-label="${esc(t('adCountry'))}"><option value="">${esc(t('adUnset'))}</option>${countryOptionsHTML(ad.country || '', esc, { top: t('ctyTop'), all: t('ctyAll') })}</select></label>
+      <div class="cty-search"><input type="search" id="adCtyQ" placeholder="${esc(t('ctySearch'))}" aria-label="${esc(t('ctySearch'))}" autocomplete="off" enterkeyhint="search"><div class="chips wrap" id="adCtyRes" hidden></div></div>
+      <label class="set-row" id="adGovRow" ${ad.country === 'KW' ? '' : 'hidden'}><span class="grow"><b>${esc(t('adGov'))}</b></span><select id="adGov" aria-label="${esc(t('adGov'))}"><option value="">${esc(t('adUnset'))}</option>${['capital', 'hawalli', 'farwaniya', 'ahmadi', 'jahra', 'mubarak'].map((g) => `<option value="${g}" ${ad.governorate === g ? 'selected' : ''}>${esc(t('gov_' + g))}</option>`).join('')}</select></label>
       <label class="set-row"><span class="grow"><b>${esc(t('adAge'))}</b></span><select id="adAge" aria-label="${esc(t('adAge'))}"><option value="">${esc(t('adUnset'))}</option>${['13-17', '18-24', '25-34', '35-44', '45+'].map((a) => `<option value="${a}" ${ad.ageBracket === a ? 'selected' : ''}>${esc('\u2066' + a.replace('-', '–') + '\u2069')}</option>`).join('')}</select></label>
       <label class="set-row"><span class="grow"><b>${esc(t('adGender'))}</b></span><select id="adGender" aria-label="${esc(t('adGender'))}"><option value="">${esc(t('adNoSay'))}</option><option value="male" ${ad.gender === 'male' ? 'selected' : ''}>${esc(t('adMale'))}</option><option value="female" ${ad.gender === 'female' ? 'selected' : ''}>${esc(t('adFemale'))}</option></select></label>
     </section>
@@ -74,9 +94,46 @@ export async function render(el, params, ctx) {
   $('#sStitch', el).addEventListener('change', (e) => save({ allowStitch: e.target.checked }, e.target));
   $('#sDownload', el).addEventListener('change', (e) => save({ allowDownload: e.target.checked }, e.target));
   // بيانات الإعلانات الاختيارية (خاصة)
+  const setCountry = async (code) => {
+    const sel = $('#adCountry', el); sel.disabled = true;
+    try { const r = await rq('PATCH', '/me/ad-profile', { country: code || null }); sel.value = r.country || ''; $('#adGovRow', el).hidden = r.country !== 'KW'; $('#adGov', el).value = r.governorate || ''; toast(t('adSaved'), 'ok'); }
+    catch (er) { toast(er.message, 'warn'); } finally { sel.disabled = false; }
+  };
+  $('#adCountry', el)?.addEventListener('change', (e) => setCountry(e.target.value));
+  $('#adCtyQ', el)?.addEventListener('input', (e) => {
+    const box = $('#adCtyRes', el); const q = e.target.value.trim();
+    box.hidden = !q; if (!q) return;
+    const res = searchCountries(q, 10);
+    box.innerHTML = res.length ? res.map((c) => `<button type="button" class="chip" data-setcty="${c}">${esc(countryName(c))}</button>`).join('') : `<span class="muted sm">${esc(t('ctyNone'))}</span>`;
+  });
+  $('#adCtyRes', el)?.addEventListener('click', (e) => { const b = e.target.closest('[data-setcty]'); if (!b) return; $('#adCtyQ', el).value = ''; $('#adCtyRes', el).hidden = true; setCountry(b.dataset.setcty); });
   [['adGov', 'governorate'], ['adAge', 'ageBracket'], ['adGender', 'gender']].forEach(([id, key]) => $('#' + id, el)?.addEventListener('change', async (e) => {
     const ctl = e.target; ctl.disabled = true;
     try { await rq('PATCH', '/me/ad-profile', { [key]: ctl.value || null }); toast(t('adSaved'), 'ok'); } catch (er) { toast(er.message, 'warn'); } finally { ctl.disabled = false; }
+  }));
+  // إشعارات الهاتف
+  const pushDraw = async () => {
+    const [d, pp] = await Promise.all([deviceState().catch(() => ({ state: 'unsupported', env: pe })), rq('GET', '/push/prefs').catch(() => null)]);
+    const st = $('#pushState', el); if (!st) return;
+    st.textContent = t({ on: 'pushOn', idle: 'pushIdle', denied: 'pushDenied', off: 'pushOff', unsupported: d.env?.why === 'iosHome' ? 'pushErr_iosHome' : d.env?.why === 'webview' ? 'pushErr_webview' : 'pushUnsupported' }[d.state]);
+    st.classList.toggle('plus-on', d.state === 'on');
+    $('#pushOnBtn', el).hidden = d.state !== 'idle'; $('#pushOffBtn', el).hidden = d.state !== 'on'; $('#pushTestBtn', el).hidden = d.state !== 'on';
+    if (pp) { $('#pushDev', el).textContent = pp.devices ? t('pushDevices', { n: pp.devices }) : ''; el.querySelectorAll('[data-pp]').forEach((c) => { c.checked = pp.prefs[c.dataset.pp] !== false; }); }
+  };
+  pushDraw();
+  $('#pushOnBtn', el).addEventListener('click', async (e) => {
+    const b = e.currentTarget; b.disabled = true;
+    try { await enablePush(); toast(t('pushEnabledOk'), 'ok'); } catch (er) { toast(t('pushErr_' + er.message) !== 'pushErr_' + er.message ? t('pushErr_' + er.message) : t('pushErr_browser'), 'warn'); }
+    finally { b.disabled = false; pushDraw(); }
+  });
+  $('#pushOffBtn', el).addEventListener('click', async (e) => { e.currentTarget.disabled = true; await disablePush(); toast(t('pushDisabledOk'), 'ok'); e.currentTarget.disabled = false; pushDraw(); });
+  $('#pushTestBtn', el).addEventListener('click', async (e) => {
+    const b = e.currentTarget; b.disabled = true;
+    try { const r = await rq('POST', '/push/test'); toast(t(r.sent ? 'pushTestSent' : 'pushTestNone'), r.sent ? 'ok' : 'warn'); } catch (er) { toast(er.message, 'warn'); } finally { setTimeout(() => { b.disabled = false; }, 3000); }
+  });
+  el.querySelectorAll('[data-pp]').forEach((c) => c.addEventListener('change', async () => {
+    c.disabled = true;
+    try { await rq('PATCH', '/push/prefs', { [c.dataset.pp]: c.checked }); toast(t('saved_ok'), 'ok'); } catch (er) { c.checked = !c.checked; toast(er.message, 'warn'); } finally { c.disabled = false; }
   }));
   // حالة اشتراك كليب كات بلس
   const plusDraw = async () => {

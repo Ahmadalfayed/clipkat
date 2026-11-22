@@ -942,3 +942,19 @@ body.sup-open .sup-fab { display: none; }
 .feed-brand .brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* زر البث يأخذ مساحة: على الشاشات الضيقة نكتفي بشعار القطة بدل اسم مقصوص */
 @media (max-width: 440px) { .feed-top.has-live .feed-brand .brand-name { display: none; } }
+/* إشعارات الهاتف — الإعدادات */
+.push-sec .push-state { display: grid; gap: 2px; padding: 8px 0 4px; }
+.push-sec .push-btns { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 0 4px; }
+.push-sec .push-btns .btn[hidden] { display: none; }
+.push-sec .push-h { font-size: 14px; margin: 14px 0 2px; color: var(--muted); }
+.push-g { border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; margin: 8px 0; }
+.push-g summary { cursor: pointer; font-weight: 800; padding: 11px 0; list-style-position: inside; }
+.push-g[open] summary { border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.push-steps { margin: 6px 0 8px; padding-inline-start: 22px; display: grid; gap: 6px; font-size: 14px; line-height: 1.6; }
+.push-g p { line-height: 1.7; margin: 6px 0 10px; }
+.push-bg { line-height: 1.7; margin-top: 10px; }
+.usd-approx { color: var(--muted); font-weight: 600; font-size: .82em; white-space: nowrap; }
+.cty-search { padding: 2px 0 6px; } .cty-search input, .pr-cty-q { width: 100%; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--line); background: transparent; color: inherit; font: inherit; }
+.cty-search .chips { margin-top: 8px; } .pr-cty-q { margin: 8px 0; } .pr-cty-res { margin-bottom: 4px; }
+.set-row select { max-inline-size: 52vw; text-overflow: ellipsis; } .set-row .grow { min-inline-size: 0; }
+.pkg-price .usd-approx { color: inherit; opacity: .7; } .ad-prof .set-row select { inline-size: min(52vw, 220px); }

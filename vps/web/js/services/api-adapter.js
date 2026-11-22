@@ -73,7 +73,7 @@ export class ApiAdapter {
     const { user } = await this._req('POST', '/auth/login', { email, password });
     this._me = user; this._mine = null; this.profiles.set(user.id, user); return user;
   }
-  async logout() { try { await this._req('POST', '/auth/logout', {}); } finally { this._me = null; this._mine = null; } }
+  async logout() { try { await (await import('../push.js')).detachPush().catch(() => {}); } catch {} try { await this._req('POST', '/auth/logout', {}); } finally { this._me = null; this._mine = null; } }
   async loginWithGoogle(credential) {
     const { user } = await this._req('POST', '/auth/google', { credential });
     this._me = user; this._mine = null; this.profiles.set(user.id, user); return user;
@@ -182,7 +182,7 @@ export class ApiAdapter {
   async checkResetToken(token) { return (await this._req('POST', '/auth/reset/check', { token })).valid; }
   async resetPassword(token, password, confirm) { const r = await this._req('POST', '/auth/reset', { token, password, confirm }); this._me = null; return r; }
   async changePassword(current, next) { return this._req('POST', '/auth/password', { current, next }); }
-  async logoutAll() { try { await this._req('POST', '/auth/logout-all', {}); } finally { this._me = null; this._mine = null; } }
+  async logoutAll() { try { await (await import('../push.js')).detachPush().catch(() => {}); } catch {} try { await this._req('POST', '/auth/logout-all', {}); } finally { this._me = null; this._mine = null; } }
   async listFollowRequests() { const rows = await this._req('GET', '/me/follow-requests'); for (const p of rows) this.profiles.set(p.id, p); return rows; }
   async respondFollowRequest(id, accept) { return this._req('POST', `/me/follow-requests/${id}/${accept ? 'accept' : 'decline'}`, {}); }
   async removeFollower(id) { return this._req('DELETE', '/me/followers/' + id); }

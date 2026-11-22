@@ -15,6 +15,7 @@ import { startPublisher } from './publisher.js';
 import { startTranscoder } from './transcode.js';
 import { startRtc } from './rtc.js';
 import { startPromoSweeper } from './promote.js';
+import { startPushSweeper } from './push.js';
 
 if (!config.jwtSecret || config.jwtSecret.length < 32) { console.error('JWT_SECRET missing or too short (>=32 chars). Run install.sh or set it in .env'); process.exit(1); }
 
@@ -69,6 +70,8 @@ app.use('/uploads', express.static(config.uploadDir, { index: false, dotfiles: '
 const legalPage = (file) => (_req, res) => res.sendFile(path.join(config.webDir, file), { maxAge: '5m' });
 app.get(['/privacy', '/privacy.html'], legalPage('privacy.html'));
 app.get(['/terms', '/terms.html'], legalPage('terms.html'));
+// عامل الخدمة (إشعارات الهاتف): بدون تخزين مؤقت حتى تصل تحديثاته فوراً
+app.get('/sw.js', (_req, res) => { res.setHeader('Cache-Control', 'no-cache'); res.setHeader('Service-Worker-Allowed', '/'); res.sendFile(path.join(config.webDir, 'sw.js')); });
 app.use(express.static(config.webDir, { index: 'index.html', maxAge: '5m' }));
 app.use('/api', (_req, _res, next) => next(new HttpError(404, 'notfound')));
 app.use((err, _req, res, _next) => {
@@ -99,6 +102,7 @@ async function main() {
   srv.requestTimeout = config.uploadTimeoutMs; srv.headersTimeout = 65000;
   startPublisher();
   startPromoSweeper();
+  startPushSweeper();
   if (config.transcode) startTranscoder(config.transcodePollMs);
   startRtc();
   const stop = () => { srv.close(() => pool.end().then(() => process.exit(0))); setTimeout(() => process.exit(0), 8000).unref(); };

@@ -27,6 +27,7 @@ import { buildSupportRouter } from './support/support.js';
 import { buildDownloadsRouter } from './downloads.js';
 import { buildPasswordResetRouter } from './password-reset.js';
 import { verifyGoogleIdToken, baseUsernameFromGoogle, uniqueUsername, unusablePasswordHash } from './google.js';
+import { buildPushRouter, pushMessage } from './push.js';
 
 export const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const need = (v) => { if (!v) throw new HttpError(404, 'notfound'); return v; };
@@ -48,6 +49,7 @@ export function buildRouter() {
     });
     next();
   });
+  r.use(buildPushRouter());         // إشعارات الهاتف (Web Push)
   r.use(buildRtcRouter());          // البث المباشر والمكالمات
   r.use(buildGiftsRouter());        // العملات وهدايا البث (لا علاقة لها بمبيعات المتاجر)
   r.use(buildContactRouter());      // واتساب الإدارة (تحويل 302 — الرقم لا يُعرض للعامة)
@@ -821,6 +823,7 @@ export function buildRouter() {
     const m = (await q('insert into messages (conversation_id, sender_id, type, text, video_id) values ($1,$2,$3,$4,$5) returning *', [c.id, req.user.id, type, text, videoId])).rows[0];
     const preview = type === 'clip' ? '📎 مقطع' : text.slice(0, 80);
     await q('update conversations set last_at = now(), last_preview = $1 where id = $2', [preview, c.id]);
+    pushMessage(to, req.user.id, preview);
     res.status(201).json({ conversationId: c.id, message: mapMsg(m) });
   }));
   r.delete('/messages/:id', requireUser, h(async (req, res) => {

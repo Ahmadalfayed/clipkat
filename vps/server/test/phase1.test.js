@@ -278,8 +278,8 @@ test('homepage SEO tags, robots, sitemap and og image are served', async () => {
   const html = await res.text();
   for (const s of [
     'lang="ar"', 'dir="rtl"',
-    'كليب كات — مقاطع قصيرة ومتاجر للصنّاع في الكويت والخليج',
-    'منصة مقاطع فيديو قصيرة للصنّاع في الكويت والخليج',
+    'كليب كات — مقاطع قصيرة ومتاجر للصنّاع من كل العالم',
+    'منصة مقاطع فيديو قصيرة للصنّاع في العالم العربي وكل العالم', 'property="og:locale" content="ar_AR"',
     'rel="canonical" href="https://clipkat.live/"',
     'property="og:image" content="https://clipkat.live/assets/og.png"',
     'name="twitter:card" content="summary_large_image"',

@@ -35,6 +35,10 @@ export const config = {
   livekitApiUrl: (env.LIVEKIT_API_URL || env.LIVEKIT_URL || '').trim().replace(/^ws/, 'http'),   // داخلي للخادم
   livekitKey: (env.LIVEKIT_API_KEY || '').trim(),
   livekitSecret: (env.LIVEKIT_API_SECRET || '').trim(),
+  // إشعارات Web Push (VAPID) — فارغة = الإشعارات معطّلة. تولَّد مرة واحدة: npx web-push generate-vapid-keys
+  vapidPublic: (env.VAPID_PUBLIC_KEY || '').trim(),
+  vapidPrivate: (env.VAPID_PRIVATE_KEY || '').trim(),
+  vapidSubject: (env.VAPID_SUBJECT || '').trim() || 'mailto:support@clipkat.live',
   turnTlsPort: num(env.TURN_TLS_PORT, 5349),                 // منفذ TURN/TLS الفعلي (LiveKit يعلن 443 دائماً)
   liveMaxViewers: num(env.LIVE_MAX_VIEWERS, 200),
   callRingSec: num(env.CALL_RING_SEC, 35),

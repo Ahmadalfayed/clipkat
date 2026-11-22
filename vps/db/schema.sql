@@ -689,3 +689,37 @@ alter table profiles drop constraint if exists profiles_ad_gender_check;
 alter table profiles add constraint profiles_ad_gender_check check (ad_gender is null or ad_gender in ('male','female'));
 -- الحملات تستهدف فئات عمرية (اختيار متعدد) بدل حد أدنى/أعلى
 alter table promotions add column if not exists age_brackets text[] not null default '{}';
+
+-- ---------------- إشعارات الهاتف (Web Push) — إضافي وآمن لإعادة التشغيل ----------------
+create table if not exists push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  ua text,
+  created_at timestamptz not null default now(),
+  last_ok_at timestamptz,
+  fail_count int not null default 0
+);
+create index if not exists push_subscriptions_user_idx on push_subscriptions (user_id);
+-- تفضيلات أنواع الإشعارات لكل مستخدم: المفتاح الغائب = مفعّل (messages, videos, live, calls)
+alter table profiles add column if not exists push_prefs jsonb not null default '{}'::jsonb;
+-- منع تكرار إشعار «فيديو جديد» لنفس المقطع
+alter table videos add column if not exists push_sent_at timestamptz;
+-- تحديد معدل الإشعارات (فيديوهات المتابَعين، تجميع الرسائل)
+create table if not exists push_throttle (
+  user_id uuid not null references profiles(id) on delete cascade,
+  k text not null,
+  last_at timestamptz not null default now(),
+  n int not null default 1,
+  primary key (user_id, k)
+);
+
+-- ---------------- كليب كات للعالم: الدولة في بيانات الإعلانات + استهداف الدول (إضافي وآمن لإعادة التشغيل) ----------------
+alter table profiles add column if not exists ad_country text;
+alter table profiles drop constraint if exists profiles_ad_country_check;
+alter table profiles add constraint profiles_ad_country_check check (ad_country is null or ad_country ~ '^[A-Z]{2}$');
+-- من اختار محافظة كويتية سابقاً = دولته الكويت (نحافظ على بياناته)
+update profiles set ad_country = 'KW' where ad_governorate is not null and ad_country is null;
+alter table promotions add column if not exists countries text[] not null default '{}';

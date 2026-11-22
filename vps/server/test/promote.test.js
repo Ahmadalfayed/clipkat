@@ -204,13 +204,13 @@ test('optional ad profile: private, validated, editable; demographic targeting f
   const adm = await admin(); const adv = await user('demo'); await grant(adm, adv, 200);
   const creator = await user('dc'); for (let i = 0; i < 8; i++) await mkVideo(creator, 'd' + i);
   const viewer = await user('dv');
-  assert.deepEqual((await viewer.get('/me/ad-profile')).body, { governorate: null, ageBracket: null, gender: null });
+  assert.deepEqual((await viewer.get('/me/ad-profile')).body, { country: null, governorate: null, ageBracket: null, gender: null });
   assert.equal((await new Client().get('/me/ad-profile')).status, 401);
   assert.equal((await viewer.req('PATCH', '/me/ad-profile', { governorate: 'dubai' })).status, 400);
   assert.equal((await viewer.req('PATCH', '/me/ad-profile', { ageBracket: '99+' })).status, 400);
   assert.equal((await viewer.req('PATCH', '/me/ad-profile', { gender: 'other' })).status, 400);
   const set = await viewer.req('PATCH', '/me/ad-profile', { governorate: 'jahra', ageBracket: '25-34', gender: 'female' });
-  assert.deepEqual(set.body, { governorate: 'jahra', ageBracket: '25-34', gender: 'female' });
+  assert.deepEqual(set.body, { country: 'KW', governorate: 'jahra', ageBracket: '25-34', gender: 'female' }, 'a Kuwait governorate implies country KW');
   // لا تظهر في أي واجهة عامة ولا في /auth/me
   const pub = JSON.stringify((await new Client().get(`/users/${viewer.me.id}`)).body) + JSON.stringify((await viewer.get('/auth/me')).body) + JSON.stringify((await adv.get(`/users/${viewer.me.id}`)).body);
   assert.ok(!/jahra|25-34|female|ad_gov|adGov/.test(pub), pub);
@@ -234,6 +234,39 @@ test('optional ad profile: private, validated, editable; demographic targeting f
   assert.equal(aud.filtered, true); assert.ok(aud.total.lt10 || aud.total.n >= aud.matched.n);
   assert.equal((await new Client().get('/promote/audience')).status, 401);
   await adm.post(`/admin/promotions/${c.body.promotion.id}/stop`);
+});
+
+test('worldwide: country in the ad profile (governorate only for Kuwait), campaigns target countries, unknown = match', async () => {
+  const adm = await admin(); const adv = await user('wadv'); const sa = await user('wsa'); const kw = await user('wkw'); const none = await user('wnone');
+  await grant(adm, adv, 300);
+  assert.equal((await sa.req('PATCH', '/me/ad-profile', { country: 'XX' })).status, 400);
+  assert.equal((await sa.req('PATCH', '/me/ad-profile', { country: 'sa' })).body.country, 'SA', 'normalised to upper case');
+  assert.equal((await sa.req('PATCH', '/me/ad-profile', { governorate: 'hawalli' })).status, 400, 'no Kuwait governorate outside Kuwait');
+  await kw.req('PATCH', '/me/ad-profile', { country: 'KW', governorate: 'hawalli' });
+  assert.deepEqual((await kw.req('PATCH', '/me/ad-profile', { country: 'EG' })).body, { country: 'EG', governorate: null, ageBracket: null, gender: null });
+  await kw.req('PATCH', '/me/ad-profile', { country: 'KW', governorate: 'farwaniya' });
+  assert.ok(!/"KW"|farwaniya/.test(JSON.stringify((await new Client().get(`/users/${kw.me.id}`)).body)), 'country stays private');
+  const cfg = (await new Client().get('/promote/config')).body; assert.ok(cfg.countries.length > 240 && cfg.countries.includes('PS')); assert.equal(cfg.governorateCountry, 'KW');
+  const v1 = await mkVideo(adv, 'للسعودية');
+  const c1 = await create(adv, { videoId: v1, audience: 'manual', countries: ['SA', 'ae', 'ZZ'], governorates: ['hawalli'], totalCoins: 50 });
+  assert.equal(c1.status, 201, JSON.stringify(c1.body)); assert.deepEqual(c1.body.promotion.countries, ['SA', 'AE']); assert.deepEqual(c1.body.promotion.governorates, []);
+  await adm.post(`/admin/promotions/${c1.body.promotion.id}/approve`);
+  const sees = async (u, vid) => !!(await u.get('/videos?tab=foryou&limit=8&includeSeen=1')).body.promos?.[vid];
+  assert.equal(await sees(sa, v1), true); assert.equal(await sees(kw, v1), false, 'Kuwait viewer excluded'); assert.equal(await sees(none, v1), true, 'unknown country = match');
+  await adm.post(`/admin/promotions/${c1.body.promotion.id}/stop`);
+  const v2 = await mkVideo(adv, 'حولي');
+  const c2 = await create(adv, { videoId: v2, audience: 'manual', countries: ['KW'], governorates: ['hawalli'], totalCoins: 50 });
+  assert.deepEqual(c2.body.promotion.governorates, ['hawalli']);
+  await adm.post(`/admin/promotions/${c2.body.promotion.id}/approve`);
+  assert.equal(await sees(kw, v2), false); assert.equal(await sees(sa, v2), false); assert.equal(await sees(none, v2), true);
+  await kw.req('PATCH', '/me/ad-profile', { governorate: 'hawalli' });
+  assert.equal(await sees(kw, v2), true);
+  await adm.post(`/admin/promotions/${c2.body.promotion.id}/stop`);
+  const aud = (await adv.get('/promote/audience?countries=SA,KW&governorates=hawalli')).body;
+  assert.equal(aud.filtered, true);
+  await db.query("update profiles set ad_country = null, ad_governorate = 'jahra' where id = $1", [none.me.id]);
+  await db.query(fs.readFileSync(path.join(here, '..', '..', 'db', 'schema.sql'), 'utf8'));
+  assert.equal((await db.query('select ad_country from profiles where id = $1', [none.me.id])).rows[0].ad_country, 'KW', 'old governorate-only rows become Kuwait');
 });
 
 test('schema migration stays re-runnable with promotion rows and promo ledger entries present', async () => {

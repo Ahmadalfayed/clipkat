@@ -18,6 +18,7 @@ import { PROFILE_COLS, mapProfile } from './mappers.js';
 import { isBlockedBetween, canSeeUserContent } from './privacy.js';
 import { dirs, rm, makePoster, sniffVideo } from './uploads.js';
 import { analyze, kick as kickTranscoder } from './transcode.js';
+import { pushLive, pushCallRing, pushCallEnd } from './push.js';
 
 const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const need = (v) => { if (!v) throw new HttpError(404, 'notfound'); return v; };
@@ -83,6 +84,7 @@ async function finishCall(c, status, notify) {
   if (notify) await callNotify(r, notify);
   const data = { id: r.id, status: r.status };
   emit(r.caller_id, 'call-end', data); emit(r.callee_id, 'call-end', data);
+  if (c.status === 'ringing') pushCallEnd(r, r.status);   // إغلاق/استبدال إشعار الرنين
   callSeen.delete(r.id);
   setTimeout(() => svc().deleteRoom(callRoom(r.id)).catch(() => {}), 1500).unref?.();
   return r;
@@ -250,6 +252,7 @@ export function buildRtcRouter() {
       returning user_id`, [me, l.id])).rows;
     const host = await profileOf(me);
     for (const f of fol) emit(f.user_id, 'live', { live: mapLive(l, host) });
+    pushLive(me, l.id, l.title, fol.map((f) => f.user_id));
     res.status(201).json({ live: mapLive(l, host), url: config.livekitUrl, token: await token(me, liveRoom(l.id), { canPublish: true, canPublishData: false }, { name: host.name, ttl: '6h' }) });
   }));
   r.get('/live/:id', h(async (req, res) => {
@@ -347,6 +350,7 @@ export function buildRtcRouter() {
     await svc().createRoom({ name: callRoom(c.id), emptyTimeout: 60, departureTimeout: 20, maxParticipants: 2 }).catch((e) => console.warn('[calls] createRoom:', e.message));
     const from = await profileOf(me);
     const delivered = emit(to, 'call', { call: mapCall(c), from });
+    pushCallRing(c, from);   // يصل للهاتف حتى لو كان الموقع مغلقاً
     res.status(201).json({ call: mapCall(c), delivered: delivered > 0, peer: await profileOf(to), url: config.livekitUrl, token: await token(me, callRoom(c.id), { canPublish: true }, { name: from.name, ttl: '4h' }) });
   }));
   const myCall = async (req) => {
@@ -354,7 +358,7 @@ export function buildRtcRouter() {
     if (c.caller_id !== req.user.id && c.callee_id !== req.user.id) throw new HttpError(404, 'notfound');
     return c;
   };
-  r.get('/calls/:id', requireUser, h(async (req, res) => res.json({ call: mapCall(await myCall(req)) })));
+  r.get('/calls/:id', requireUser, h(async (req, res) => { const c = await myCall(req); res.json({ call: mapCall(c), peer: await profileOf(c.caller_id === req.user.id ? c.callee_id : c.caller_id) }); }));
   r.post('/calls/:id/accept', requireUser, requireRtc, h(async (req, res) => {
     const c = await myCall(req); if (c.callee_id !== req.user.id) throw new HttpError(403, 'forbidden');
     if (await isBlockedBetween(c.caller_id, c.callee_id)) throw new HttpError(403, 'blocked');
@@ -362,6 +366,7 @@ export function buildRtcRouter() {
     if (!a) throw new HttpError(410, 'callOver');
     callSeen.set(a.id, Date.now());
     emit(a.caller_id, 'call-accepted', { id: a.id }); emit(a.callee_id, 'call-handled', { id: a.id });
+    pushCallEnd(a, 'answered');
     res.json({ call: mapCall(a), peer: await profileOf(a.caller_id), url: config.livekitUrl, token: await token(req.user.id, callRoom(a.id), { canPublish: true }, { ttl: '4h' }) });
   }));
   r.post('/calls/:id/decline', requireUser, h(async (req, res) => {

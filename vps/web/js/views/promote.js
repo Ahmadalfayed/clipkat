@@ -5,6 +5,7 @@ import { esc, $, $$, toast, emptyState, icon } from '../ui.js';
 import { pageHead, confirmDialog } from './common.js';
 import { rq } from '../rtc.js';
 import { coin, fmtInt } from '../gifts.js';
+import { countryName, searchCountries } from '../countries.js';
 
 const OBJ_ICON = { views: '👀', profile: '🏪', follows: '➕', messages: '💬' };
 const BRACKETS = ['13-17', '18-24', '25-34', '35-44', '45+'];
@@ -38,7 +39,7 @@ async function wizard(el, params, ctx) {
     rq('GET', '/promote/interests').catch(() => ({ interests: [] })), api.getProfileFresh ? api.getProfileFresh(ctx.me.id) : ctx.me
   ]);
   if (!v || v.userId !== ctx.me.id) { el.innerHTML = `<div class="page">${pageHead(t('promoteVideo'))}${emptyState(t('notFound'))}</div>`; return; }
-  const s = { step: 0, objective: 'views', audience: 'smart', governorates: [], ages: [], gender: 'all', interests: [], aud: null, budgetType: 'daily', daily: 20, total: 100, days: 5 };
+  const s = { step: 0, objective: 'views', audience: 'smart', countries: [], governorates: [], ages: [], gender: 'all', interests: [], aud: null, budgetType: 'daily', daily: 20, total: 100, days: 5 };
   const steps = ['pr_stepGoal', 'pr_stepAudience', 'pr_stepBudget', 'pr_stepReview'];
   const totalCoins = () => (s.budgetType === 'daily' ? s.daily * s.days : s.total);
   // تقدير الظهور: الميزانية ÷ سعر الظهور (±20٪)، ولا يتجاوز سعة الجمهور المستهدف إن كان محدداً
@@ -54,12 +55,12 @@ async function wizard(el, params, ctx) {
   </div>`;
   const body = $('#prBody', el);
 
-  const filtered = () => s.audience === 'manual' && (s.governorates.length || s.ages.length || s.gender !== 'all');
+  const filtered = () => s.audience === 'manual' && (s.countries.length || s.governorates.length || s.ages.length || s.gender !== 'all');
   // حجم الجمهور المحتمل من الخادم (مقرّب) — يُحدَّث عند تغيير الاستهداف
   let audSeq = 0;
   async function loadAud() {
     const my = ++audSeq;
-    const qs = s.audience === 'manual' ? `?governorates=${s.governorates.join(',')}&ages=${encodeURIComponent(s.ages.join(','))}&gender=${s.gender}` : '';
+    const qs = s.audience === 'manual' ? `?countries=${s.countries.join(',')}&governorates=${s.governorates.join(',')}&ages=${encodeURIComponent(s.ages.join(','))}&gender=${s.gender}` : '';
     try { const a = await rq('GET', '/promote/audience' + qs); if (my !== audSeq) return; s.aud = a; } catch { s.aud = null; }
     const box = $('#prAud', el); if (box) box.innerHTML = audHTML2();
     if (s.step === 2) redrawBudget();
@@ -76,12 +77,17 @@ async function wizard(el, params, ctx) {
   const goalHTML = () => `<h2 class="sec-title">${esc(t('pr_goalQ'))}</h2><div class="pr-opts" role="radiogroup">${cfg.objectives.map((o) => `
     <button type="button" class="pr-opt ${s.objective === o ? 'on' : ''}" role="radio" aria-checked="${s.objective === o}" data-obj="${o}"><span class="pr-ic" aria-hidden="true">${OBJ_ICON[o]}</span><span class="grow"><b>${esc(t('pr_obj_' + o))}</b><small>${esc(t('pr_obj_' + o + 'Sub'))}</small></span><i class="pr-radio" aria-hidden="true"></i></button>`).join('')}</div>`;
 
+  const ctyRes = (q) => { const r = searchCountries(q, q ? 12 : 8).filter((c) => !s.countries.includes(c)); return r.length ? r.map((c) => `<button type="button" class="chip" data-cty-add="${c}">+ ${esc(countryName(c))}</button>`).join('') : `<span class="muted sm">${esc(t('ctyNone'))}</span>`; };
   const audHTML = () => `<div class="pr-opts" role="radiogroup">
       ${['smart', 'manual'].map((a) => `<button type="button" class="pr-opt ${s.audience === a ? 'on' : ''}" role="radio" aria-checked="${s.audience === a}" data-aud="${a}"><span class="pr-ic" aria-hidden="true">${a === 'smart' ? '✨' : '🎯'}</span><span class="grow"><b>${esc(t(a === 'smart' ? 'pr_audSmart' : 'pr_audManual'))}</b><small>${esc(t(a === 'smart' ? 'pr_audSmartSub' : 'pr_audManualSub'))}</small></span><i class="pr-radio" aria-hidden="true"></i></button>`).join('')}
     </div>
     ${s.audience === 'manual' ? `<section class="card pr-manual">
-      <h3>${esc(t('pr_gov'))}</h3>
-      <div class="chips wrap"><button type="button" class="chip ${s.governorates.length ? '' : 'on'}" data-gov="">${esc(t('pr_govAll'))}</button>${cfg.governorates.map((g) => `<button type="button" class="chip ${s.governorates.includes(g) ? 'on' : ''}" data-gov="${g}">${esc(t('gov_' + g))}</button>`).join('')}</div>
+      <h3>${esc(t('pr_country'))}</h3>
+      <div class="chips wrap" id="prCtySel"><button type="button" class="chip ${s.countries.length ? '' : 'on'}" data-cty="">🌍 ${esc(t('pr_ctyAll'))}</button>${s.countries.map((c) => `<button type="button" class="chip on" data-cty="${c}" aria-label="${esc(t('pr_ctyRemove', { c: countryName(c) }))}">${esc(countryName(c))} ✕</button>`).join('')}</div>
+      <input type="search" class="pr-cty-q" id="prCtyQ" placeholder="${esc(t('ctySearch'))}" aria-label="${esc(t('ctySearch'))}" autocomplete="off" enterkeyhint="search">
+      <div class="chips wrap pr-cty-res" id="prCtyRes">${ctyRes('')}</div>
+      ${s.countries.includes('KW') ? `<h3>${esc(t('pr_govKw'))}</h3>
+      <div class="chips wrap"><button type="button" class="chip ${s.governorates.length ? '' : 'on'}" data-gov="">${esc(t('pr_govAll'))}</button>${cfg.governorates.map((g) => `<button type="button" class="chip ${s.governorates.includes(g) ? 'on' : ''}" data-gov="${g}">${esc(t('gov_' + g))}</button>`).join('')}</div>` : ''}
       <h3>${esc(t('pr_age'))}</h3>
       <div class="chips wrap"><button type="button" class="chip ${s.ages.length ? '' : 'on'}" data-age="">${esc(t('pr_ageAll'))}</button>${BRACKETS.map((a) => `<button type="button" class="chip ${s.ages.includes(a) ? 'on' : ''}" data-age="${a}" dir="ltr">${esc(fmtBracket(a))}</button>`).join('')}</div>
       <h3>${esc(t('pr_gender'))}</h3>
@@ -120,7 +126,7 @@ async function wizard(el, params, ctx) {
 
   const reviewHTML = () => {
     const e = est(); const tot = totalCoins();
-    const target = s.audience === 'smart' ? t('pr_audSmart') : [s.governorates.length ? s.governorates.map((g) => t('gov_' + g)).join('، ') : t('pr_govAll'), s.ages.length ? s.ages.map(fmtBracket).join('، ') : t('pr_ageAll'), t('pr_g_' + s.gender), ...s.interests.map((x) => '#' + x)].join(' · ');
+    const target = s.audience === 'smart' ? t('pr_audSmart') : [s.countries.length ? s.countries.map(countryName).join('، ') : t('pr_ctyAll'), ...(s.governorates.length ? [s.governorates.map((g) => t('gov_' + g)).join('، ')] : []), s.ages.length ? s.ages.map(fmtBracket).join('، ') : t('pr_ageAll'), t('pr_g_' + s.gender), ...s.interests.map((x) => '#' + x)].join(' · ');
     return `<section class="card pr-review">
       <div class="pr-row"><span>${esc(t('pr_goal'))}</span><b>${OBJ_ICON[s.objective]} ${esc(t('pr_obj_' + s.objective))}</b></div>
       <div class="pr-row"><span>${esc(t('pr_target'))}</span><b>${esc(target)}</b></div>
@@ -153,6 +159,8 @@ async function wizard(el, params, ctx) {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.obj) s.objective = b.dataset.obj;
     else if (b.dataset.aud) s.audience = b.dataset.aud;
+    else if (b.dataset.ctyAdd) { if (!s.countries.includes(b.dataset.ctyAdd)) s.countries = [...s.countries, b.dataset.ctyAdd].slice(0, 50); }
+    else if (b.dataset.cty !== undefined) { s.countries = b.dataset.cty ? s.countries.filter((c) => c !== b.dataset.cty) : []; if (!s.countries.includes('KW')) s.governorates = []; }
     else if (b.dataset.gov !== undefined) { const g = b.dataset.gov; s.governorates = !g ? [] : s.governorates.includes(g) ? s.governorates.filter((x) => x !== g) : [...s.governorates, g]; if (s.governorates.length === cfg.governorates.length) s.governorates = []; }
     else if (b.dataset.gender) s.gender = b.dataset.gender;
     else if (b.dataset.age !== undefined) { const a = b.dataset.age; s.ages = !a ? [] : s.ages.includes(a) ? s.ages.filter((x) => x !== a) : [...s.ages, a]; if (s.ages.length === BRACKETS.length) s.ages = []; }
@@ -161,10 +169,11 @@ async function wizard(el, params, ctx) {
     else if (b.dataset.q) { if (s.budgetType === 'daily') s.daily = +b.dataset.q; else s.total = +b.dataset.q; const inp = $('#prAmt', el); if (inp) inp.value = b.dataset.q; redrawBudget(); return; }
     else return;
     draw();
-    if (b.dataset.aud || b.dataset.gov !== undefined || b.dataset.gender || b.dataset.age !== undefined) loadAud();
+    if (b.dataset.aud || b.dataset.ctyAdd || b.dataset.cty !== undefined || b.dataset.gov !== undefined || b.dataset.gender || b.dataset.age !== undefined) loadAud();
   });
   body.addEventListener('input', (e) => {
     if (e.target.id === 'prAmt') { const n = Math.max(0, Math.min(cfg.maxCoins, Math.floor(+e.target.value || 0))); if (s.budgetType === 'daily') s.daily = n; else s.total = n; redrawBudget(); }
+    if (e.target.id === 'prCtyQ') { const r = $('#prCtyRes', el); if (r) r.innerHTML = ctyRes(e.target.value.trim()); return; }
     if (e.target.id === 'prDays') { s.days = +e.target.value; redrawBudget(); }
   });
   $('#prPrev', el).onclick = () => { if (s.step) { s.step--; draw(); window.scrollTo(0, 0); } };
@@ -172,7 +181,7 @@ async function wizard(el, params, ctx) {
     if (s.step < 3) { s.step++; draw(); window.scrollTo(0, 0); return; }
     const btn = ev.currentTarget; btn.disabled = true;
     const payload = { videoId: v.id, objective: s.objective, audience: s.audience, budgetType: s.budgetType, days: s.days, dailyCoins: s.daily, totalCoins: s.total };
-    if (s.audience === 'manual') Object.assign(payload, { governorates: s.governorates, ageBrackets: s.ages, gender: s.gender, interests: s.interests });
+    if (s.audience === 'manual') Object.assign(payload, { countries: s.countries, governorates: s.governorates, ageBrackets: s.ages, gender: s.gender, interests: s.interests });
     try { await rq('POST', '/promotions', payload); toast(t('pr_submitted'), 'ok'); ctx.navigate('#/campaigns'); }
     catch (e) { toast(errMsg(e), 'warn'); btn.disabled = false; }
   };

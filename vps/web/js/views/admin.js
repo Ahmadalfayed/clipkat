@@ -1,4 +1,5 @@
 import { api } from '../services/index.js';
+import { countryName } from '../countries.js';
 import { t, fmtKWD, fmtDate, lang } from '../i18n.js';
 import { icon, esc, emptyState } from '../ui.js';
 import { pageHead } from './common.js';
@@ -29,7 +30,7 @@ export async function render(el, params, ctx) {
     } catch (e) { console.warn('[admin coins]', e); }
   }
   const maxM = Math.max(1, ...d.months.map((m) => m.total));
-  const mname = (ts) => new Intl.DateTimeFormat(lang === 'ar' ? 'ar-KW-u-nu-latn' : 'en', { month: 'short' }).format(new Date(ts));
+  const mname = (ts) => new Intl.DateTimeFormat(lang === 'ar' ? 'ar-u-nu-latn' : 'en', { month: 'short' }).format(new Date(ts));
   const now = Date.now();
   el.innerHTML = `<div class="page wide">${pageHead(t('admin'))}
     <div class="demo-banner">${icon('shield', { size: 18 })}<span>${esc(t('demoPay'))}</span></div>
@@ -64,7 +65,7 @@ export async function render(el, params, ctx) {
         <div class="grow"><b class="pr-cap">${esc(p.caption || '—')}</b><small class="muted"><bdi dir="ltr">@${esc(p.user?.username)}</bdi> · ${esc(fmtDate(p.createdAt))}</small></div>${statusPill(p)}</div>
       <div class="pr-row"><span>${esc(t('pr_goal'))}</span><b>${esc(t('pr_obj_' + p.objective))}</b></div>
       <div class="pr-row"><span>${esc(t('pr_budget'))}</span><b>${coin(14)} <span dir="ltr">${fmtInt(p.totalCoins)}</span> · ${esc(p.days === 1 ? t('pr_day1') : t('pr_daysN', { n: p.days }))}${p.budgetType === 'daily' ? ` · ${esc(t('pr_daily'))}` : ''}</b></div>
-      <div class="pr-row"><span>${esc(t('pr_target'))}</span><b>${esc(p.audience === 'smart' ? t('pr_audSmart') : [p.governorates.length ? p.governorates.map((g) => t('gov_' + g)).join('، ') : t('pr_govAll'), (p.ageBrackets || []).length ? p.ageBrackets.map((a) => a.replace('-', '–')).join('، ') : (p.ageMin || p.ageMax) ? `${p.ageMin || 13}–${p.ageMax || 65}` : '', p.gender !== 'all' ? t('pr_g_' + p.gender) : '', ...p.interests.map((x) => '#' + x)].filter(Boolean).join(' · '))}</b></div>
+      <div class="pr-row"><span>${esc(t('pr_target'))}</span><b>${esc(p.audience === 'smart' ? t('pr_audSmart') : [(p.countries || []).length ? p.countries.map(countryName).join('، ') : t('pr_ctyAll'), p.governorates.length ? p.governorates.map((g) => t('gov_' + g)).join('، ') : '', (p.ageBrackets || []).length ? p.ageBrackets.map((a) => a.replace('-', '–')).join('، ') : (p.ageMin || p.ageMax) ? `${p.ageMin || 13}–${p.ageMax || 65}` : '', p.gender !== 'all' ? t('pr_g_' + p.gender) : '', ...p.interests.map((x) => '#' + x)].filter(Boolean).join(' · '))}</b></div>
       ${p.status !== 'pending' ? statsGrid(p) : ''}
       ${p.status === 'rejected' && p.rejectReason ? `<p class="muted sm">${esc(t('pr_reason'))}: ${esc(p.rejectReason)}</p>` : ''}
       ${p.status === 'ended' && p.endReason ? `<p class="muted sm">${esc(t('pr_end_' + p.endReason))}</p>` : ''}
