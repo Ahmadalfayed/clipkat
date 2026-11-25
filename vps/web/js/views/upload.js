@@ -46,7 +46,7 @@ export async function render(el, params, ctx) {
     const btn = $('button[type=submit]', form); btn.disabled = true; btn.textContent = t('publishing');
     try {
       const fd = new FormData(form);
-      const v = await api.createVideo({ file, poster, caption: fd.get('caption'), hashtags: String(fd.get('hashtags') || '').split(/[\s,،]+/).filter(Boolean), sound: fd.get('sound')?.trim() || null, productIds: $$('input[name=products]:checked', form).map((i) => i.value) });
+      const v = await api.createVideo({ file, poster, caption: fd.get('caption'), hashtags: String(fd.get('hashtags') || '').split(/[\s,،]+/).filter(Boolean), sound: fd.get('sound')?.trim() || null, productIds: $$('input[name=products]:checked', form).map((i) => i.value), onProgress: ({ stage, p }) => { btn.textContent = stage === 'upload' ? t('uploadingPct', { n: Math.min(99, Math.round((p || 0) * 100)) }) : t('serverProcessing'); } });
       toast(v.mediaStatus === 'processing' ? t('publishedProcessing') : t('published'), 'ok'); ctx.navigate('#/watch/' + v.id);
     } catch (err) { console.warn(err); toast(uploadErrorText(err), 'warn'); btn.disabled = false; btn.textContent = t('publish'); }
   });

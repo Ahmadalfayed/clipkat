@@ -1,4 +1,4 @@
-import { analyze, plan, kick as kickTranscoder } from './transcode.js';
+import { analyze, plan, kick as kickTranscoder, normalizeEdit, editedDuration } from './transcode.js';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import crypto from 'node:crypto';
@@ -15,7 +15,7 @@ import { assertCanRemix, enrichRemix, notifyRemix } from './remix.js';
 import { forYou, parseCursor } from './feed.js';
 import { buildPromoteRouter, pickSponsored, viewerKey } from './promote.js';
 import { publishDue } from './publisher.js';
-import { imageUpload, videoUpload, audioUpload, sniffImage, sniffVideo, place, rm, rid, makePoster, dirs, removeVideoFiles } from './uploads.js';
+import { imageUpload, videoUpload, videoStageUpload, stageFile, stagedPath, audioUpload, sniffImage, sniffVideo, place, rm, rid, makePoster, dirs, removeVideoFiles } from './uploads.js';
 import { sniffAudio, probe, extractAudio } from './media.js';
 import { activateRental, cancelRental, slots, notify } from './rentals.js';
 import { alertNewRental, emailPaymentLink, PAYLINK_TEXT } from './admin-alert.js';
@@ -60,7 +60,7 @@ export function buildRouter() {
   r.use(buildDownloadsRouter((viewer, id) => queryVideos(viewer, ['v.id = $1'], [id], 1).then((x) => x[0] || null)));
 
   r.get('/health', h(async (_q, res) => { await q('select 1'); res.json({ ok: true }); }));
-  r.get('/config', (_req, res) => res.json({ maxVideoMb: config.maxVideoMb, maxImageMb: config.maxImageMb, maxSoundMb: config.maxSoundMb, maxSoundSec: config.maxSoundSec, maxVideoSec: config.maxVideoSec, storePolicyVersion: STORE_POLICY_VERSION, googleClientId: config.googleClientId || '' }));
+  r.get('/config', (_req, res) => res.json({ serverEdits: !!config.transcode, maxVideoMb: config.maxVideoMb, maxImageMb: config.maxImageMb, maxSoundMb: config.maxSoundMb, maxSoundSec: config.maxSoundSec, maxVideoSec: config.maxVideoSec, storePolicyVersion: STORE_POLICY_VERSION, googleClientId: config.googleClientId || '' }));
   r.get('/policy/store-rental', (_req, res) => res.json({ policy: 'store-rental', version: STORE_POLICY_VERSION }));
   // لا إيجار بدون قبول صريح لإصدار السياسة الحالي — يُسجَّل في نفس المعاملة
   const requirePolicy = (b) => { if (b?.acceptPolicy !== STORE_POLICY_VERSION) throw bad('policyRequired'); };
@@ -328,8 +328,25 @@ export function buildRouter() {
     res.status(201).json({ url: place(f.path, 'images', req.user.id, `${Date.now()}-${rid()}.${ext}`) });
   }));
 
+  // رفع مسبق للأصل لحظة اختياره في الاستوديو — النشر لاحقاً بمعرّف المرحلة بلا انتظار رفع
+  r.post('/videos/stage', requireUser, mkLimit(3600000, 60), videoStageUpload, h(async (req, res) => {
+    const f = req.file;
+    try {
+      if (!f) throw bad('bad');
+      const ext = sniffVideo(f.path); if (!ext) throw bad('badFile');
+      const info = await probe(f.path);
+      if (info && !info.hasVideo) throw bad('badFile');
+      res.status(201).json({ stageId: stageFile(f.path, req.user.id, ext), duration: info?.duration || 0 });
+    } catch (e) { if (f) rm(f.path); throw e; }
+  }));
+
   r.post('/videos', requireUser, mkLimit(3600000, 60), videoUpload, h(async (req, res) => {
-    const vf = req.files?.file?.[0], pf = req.files?.poster?.[0]; const tmp = [vf?.path, pf?.path].filter(Boolean);
+    let vf = req.files?.file?.[0]; const pf = req.files?.poster?.[0], of = req.files?.overlay?.[0]; const tmp = [vf?.path, pf?.path, of?.path].filter(Boolean);
+    if (!vf && req.body?.stageId) {
+      const sp = stagedPath(req.user.id, req.body.stageId);
+      if (!sp) { tmp.forEach(rm); throw new HttpError(400, 'staleUpload'); }
+      vf = { path: sp, size: fs.statSync(sp).size }; tmp.push(sp);
+    }
     const placed = []; let committed = false;
     // حذف ملف نُقل إلى /uploads إذا فشل الحفظ في قاعدة البيانات (لا نترك ملفات يتيمة)
     const rmUrl = (u) => { if (u && u.startsWith('/uploads/')) rm(path.join(config.uploadDir, u.replace(/^\/uploads\/?/, ''))); };
@@ -338,8 +355,11 @@ export function buildRouter() {
       const ext = sniffVideo(vf.path); if (!ext) throw bad('badFile');
       const info = await probe(vf.path);
       if (info && !info.hasVideo) throw bad('badFile');
-      if (info && info.duration > config.maxVideoSec + 0.4) throw new HttpError(400, 'tooLong', { limit: config.maxVideoSec });
       const b = req.body || {}; const caption = str(b.caption, 300);
+      const hasEdit = !!b.edit && !req.body.remixType && !req.body.sourceClipId;
+      // طبقة النص (PNG شفاف من المتصفح) — صغيرة دائماً
+      const overlayOk = hasEdit && of && sniffImage(of.path) === 'png' && of.size <= 8 * 1048576;
+      if (!hasEdit && info && info.duration > config.maxVideoSec + 0.4) throw new HttpError(400, 'tooLong', { limit: config.maxVideoSec });
       let soundTitle = b.sound ? str(b.sound, 80) : null;
       let soundId = b.soundId && isUuid(String(b.soundId)) ? String(b.soundId) : null;
       const wantSave = b.saveSound === '1' || b.saveSound === 'true' || b.saveSound === true;
@@ -357,9 +377,20 @@ export function buildRouter() {
       const sourceClipId = (b.sourceClipId || b.source_clip_id) && isUuid(String(b.sourceClipId || b.source_clip_id)) ? String(b.sourceClipId || b.source_clip_id) : null;
       if ((remixType && !sourceClipId) || (sourceClipId && !remixType)) throw bad('bad');
       if (sourceClipId) await assertCanRemix(req.user, sourceClipId, remixType);
+      let soundAudioUrl = null;
       if (soundId) {
         const so = await visibleSound(req, soundId);
-        soundTitle = so.title;
+        soundTitle = so.title; soundAudioUrl = so.audio_url || null;
+      }
+      // تعديلات الاستوديو تُطبَّق على الخادم (قص/سرعة/فلتر/نص/صوت) — المتصفح يرفع الأصل مباشرة بلا إعادة ترميز
+      let edit = null;
+      if (hasEdit) {
+        const okSound = !!(soundAudioUrl && String(soundAudioUrl).startsWith('/uploads/'));
+        edit = normalizeEdit(b.edit, info?.duration || 0, { overlay: !!overlayOk, sound: okSound });
+        const lenOk = (d) => d <= config.maxVideoSec + 0.4;
+        if (edit && !lenOk(editedDuration(edit))) throw new HttpError(400, 'tooLong', { limit: config.maxVideoSec });
+        if (!edit && info && !lenOk(info.duration)) throw new HttpError(400, 'tooLong', { limit: config.maxVideoSec });
+        if (edit && okSound && edit.volSound > 0) edit.sound = soundAudioUrl;
       }
       let hashtags = []; try { hashtags = JSON.parse(b.hashtags || '[]'); } catch { /* ignore */ }
       let productIds = []; try { productIds = JSON.parse(b.productIds || '[]'); } catch { /* ignore */ }
@@ -374,9 +405,11 @@ export function buildRouter() {
         if (await makePoster(vf.path, out)) posterUrl = place(out, 'images', me, `poster-${id}.jpg`); else rm(out);
       }
       const videoUrl = place(vf.path, 'videos', me, `${id}.${ext}`);
+      if (edit && overlayOk) { edit.overlay = place(of.path, 'images', me, `overlay-${id}.png`); placed.push(edit.overlay); }
       // هل يحتاج تحويلاً ليعمل على كل المتصفحات؟ (HEVC من آيفون/هواوي، WebM، 10-bit/HDR، أكبر من 1080p…)
       const vAbs = path.join(config.uploadDir, videoUrl.replace(/^\/uploads\/?/, ''));
-      const mediaStatus = config.transcode && plan(await analyze(vAbs), vAbs) !== 'ready' ? 'processing' : 'ready';
+      if (edit && !config.transcode) { if (edit.overlay) rmUrl(edit.overlay); edit = null; }   // بلا ffmpeg: يُنشر الأصل
+      const mediaStatus = edit ? 'processing' : config.transcode && plan(await analyze(vAbs), vAbs) !== 'ready' ? 'processing' : 'ready';
       // استخراج صوت أصلي من المقطع (اختياري) — قبل المعاملة حتى لا نطول القفل
       let extracted = null;
       if (wantSave && !soundId && status === 'published') {
@@ -396,7 +429,7 @@ export function buildRouter() {
       placed.push(videoUrl, posterUrl, extracted?.url);
       const row = await tx(async (c) => {
         // المقطع أولاً: الصوت المستخرج يشير إليه (source_video_id) فلا يمكن إدراجه قبله
-        const v = (await c.query('insert into videos (id, user_id, video_path, video_url, poster_url, caption, hashtags, sound, sound_id, status, scheduled_at, source_clip_id, remix_type, media_status, poster_auto) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning id, user_id, source_clip_id, remix_type, status, media_status', [id, me, videoUrl, videoUrl, posterUrl, caption, normTags(hashtags, caption), soundTitle, soundId, status, scheduledAt, sourceClipId, remixType, mediaStatus, posterAuto])).rows[0];
+        const v = (await c.query('insert into videos (id, user_id, video_path, video_url, poster_url, caption, hashtags, sound, sound_id, status, scheduled_at, source_clip_id, remix_type, media_status, poster_auto, edit_spec) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) returning id, user_id, source_clip_id, remix_type, status, media_status', [id, me, videoUrl, videoUrl, posterUrl, caption, normTags(hashtags, caption), soundTitle, soundId, status, scheduledAt, sourceClipId, remixType, mediaStatus, posterAuto, edit ? JSON.stringify({ start: edit.start, end: edit.end, speed: edit.speed, filter: edit.filter, volOrig: edit.volOrig, volSound: edit.volSound, overlay: edit.overlay || null, sound: edit.sound || null }) : null])).rows[0];
         if (extracted) {
           // حفظ الصوت اختياري: إن فشل لا نُفشل نشر المقطع
           await c.query('savepoint snd');

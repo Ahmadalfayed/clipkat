@@ -20,6 +20,7 @@ export async function createApiAdapter({ base = '', health = true } = {}) {
   a.maxSoundMb = cfg.maxSoundMb || 8;
   a.maxSoundSec = cfg.maxSoundSec || 60;
   a.maxVideoSec = cfg.maxVideoSec || 180;
+  a.serverEdits = !!cfg.serverEdits;          // الخادم يطبّق تعديلات الاستوديو بـ ffmpeg
   a.googleClientId = cfg.googleClientId || '';
   return a;
 }
@@ -124,11 +125,44 @@ export class ApiAdapter {
     if (force || exp - Date.now() < 5 * 60000) { try { const fresh = await this._req('GET', '/videos/' + v.id); if (fresh?.src) v.src = fresh.src; } catch {} }
     return v.src;
   }
-  async createVideo({ file, poster, caption = '', hashtags = [], sound, soundId, saveSound = false, productIds = [], status, scheduledAt, sourceClipId, remixType } = {}) {
+  // رفع نموذج مع تقدّم حقيقي (XHR) — fetch لا يعطي تقدّم الرفع
+  _upload(path, form, onProgress) {
+    if (typeof XMLHttpRequest === 'undefined' || !onProgress) return this._req('POST', path, undefined, { form });
+    return new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open('POST', this.base + path); x.withCredentials = true; x.setRequestHeader('X-CK', '1'); x.timeout = 30 * 60000;
+      let sent = false;
+      x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress({ stage: 'upload', p: e.loaded / e.total }); };
+      x.upload.onload = () => { sent = true; onProgress({ stage: 'server' }); };
+      x.onload = () => {
+        let json = null; try { json = JSON.parse(x.responseText); } catch { /* ليس JSON */ }
+        if (x.status < 200 || x.status >= 300) { const e = new Error(json?.error || 'failed'); e.status = x.status; if (json?.limit) e.limit = json.limit; if (json?.field) e.field = json.field; return reject(e); }
+        resolve(json);
+      };
+      const net = () => { const e = new TypeError(sent ? 'failed' : 'Failed to fetch'); reject(e); };
+      x.onerror = net; x.ontimeout = net; x.onabort = net;
+      x.send(form);
+    });
+  }
+  // رفع مسبق للأصل في الخلفية لحظة اختياره — يُرجع { promise, abort }
+  stageVideo(file, onProgress = () => {}) {
+    const x = new XMLHttpRequest();
+    const promise = new Promise((resolve, reject) => {
+      if (file.size > this.maxVideoMb * 1024 * 1024) { const e = new Error('tooLarge'); e.limit = this.maxVideoMb; return reject(e); }
+      const fd = new FormData(); fd.append('file', file, file.name || 'video.mp4');
+      x.open('POST', this.base + '/videos/stage'); x.withCredentials = true; x.setRequestHeader('X-CK', '1'); x.timeout = 30 * 60000;
+      x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+      x.onload = () => { let j = null; try { j = JSON.parse(x.responseText); } catch {} if (x.status === 201 && j?.stageId) resolve(j.stageId); else { const e = new Error(j?.error || 'failed'); e.status = x.status; if (j?.limit) e.limit = j.limit; reject(e); } };
+      x.onerror = x.ontimeout = x.onabort = () => reject(new TypeError('Failed to fetch'));
+      x.send(fd);
+    });
+    promise.catch(() => {});
+    return { promise, abort: () => { try { x.abort(); } catch {} } };
+  }
+  async createVideo({ file, stageId, poster, caption = '', hashtags = [], sound, soundId, saveSound = false, productIds = [], status, scheduledAt, sourceClipId, remixType, edit, overlay, onProgress } = {}) {
     await this._meOrThrow();
-    if (file.size > this.maxVideoMb * 1024 * 1024) { const e = new Error('tooLarge'); e.limit = this.maxVideoMb; throw e; }
+    if (!stageId && file.size > this.maxVideoMb * 1024 * 1024) { const e = new Error('tooLarge'); e.limit = this.maxVideoMb; throw e; }
     const fd = new FormData();
-    fd.append('file', file, file.name || 'video.mp4');
     if (poster) fd.append('poster', dataURLToBlob(poster), 'poster.jpg');
     fd.append('caption', caption.slice(0, 300)); fd.append('hashtags', JSON.stringify(hashtags)); fd.append('productIds', JSON.stringify(productIds));
     if (sound) fd.append('sound', String(sound).slice(0, 80));
@@ -138,7 +172,11 @@ export class ApiAdapter {
     if (scheduledAt) fd.append('scheduledAt', scheduledAt);
     if (sourceClipId) fd.append('sourceClipId', sourceClipId);
     if (remixType) fd.append('remixType', remixType);
-    return (await this._vids([await this._req('POST', '/videos', undefined, { form: fd })]))[0];
+    if (edit) fd.append('edit', JSON.stringify(edit));
+    if (overlay) fd.append('overlay', overlay, 'overlay.png');
+    // الملف آخر حقل: يقرأ الخادم الحقول النصية قبل الملف الكبير
+    if (stageId) fd.append('stageId', stageId); else fd.append('file', file, file.name || 'video.mp4');
+    return (await this._vids([await this._upload('/videos', fd, onProgress)]))[0];
   }
   async _loadMine() {
     if (this._mine) return this._mine;

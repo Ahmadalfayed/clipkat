@@ -358,6 +358,8 @@ create unique index if not exists profiles_google_sub_uidx on profiles (google_s
 alter table videos add column if not exists media_status text not null default 'ready';
 alter table videos add column if not exists media_error text;
 alter table videos add column if not exists poster_auto boolean not null default false;
+-- تعديلات الاستوديو (قص/سرعة/فلتر/نص/صوت) تُطبَّق على الخادم بـ ffmpeg بدل إعادة الترميز البطيئة في المتصفح
+alter table videos add column if not exists edit_spec jsonb;
 do $$ begin
   alter table videos add constraint videos_media_status_chk check (media_status in ('processing','reprocess','ready','failed'));
 exception when duplicate_object then null; end $$;

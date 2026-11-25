@@ -3,7 +3,7 @@ import { api } from '../services/index.js';
 import { t, fmtKWD, lang } from '../i18n.js';
 import { icon, esc, $, $$, toast, productImg } from '../ui.js';
 import { pageHead } from './common.js';
-import { FILTERS, SPEEDS, recorderSupported, makeRecorder, finishBlob, exportClip, exportDuet, exportStitch, captureFrame, blobToFile } from '../studio-export.js';
+import { FILTERS, SPEEDS, recorderSupported, makeRecorder, finishBlob, exportClip, exportDuet, exportStitch, captureFrame, blobToFile, hasEdits, renderOverlay, within } from '../studio-export.js';
 
 import { BG_TEMPLATES, bgSupport, bgThumbUrl, createBgEngine, preloadSegmenter } from '../bg-replace.js';
 import { recLimitSec, recState, recExt, fmtClock, REC_TIMESLICE_MS, REC_VIDEO_BPS, REC_AUDIO_BPS } from '../rec-limits.js';
@@ -42,11 +42,24 @@ export async function render(el, params, ctx) {
     step: remixType === 'stitch' ? 'stitchTrim' : 'source', file: null, url: null, recUrl: null, stream: null, rec: null, recTimer: null,
     start: 0, end: 0, speed: 1, filter: 'none', texts: [], cover: 0, poster: null,
     volOrig: sound ? 0.2 : 1, volSound: sound ? 1 : 0, volSource: 1, volMe: 1,
-    exported: null, recSec: 0, facing: 'user', bg: null, bgEngine: null,
+    exported: null, edit: null, overlay: null, recSec: 0, facing: 'user', bg: null, bgEngine: null,
     layout: 'lr', sourceSide: 'right', stitchStart: 0, stitchEnd: 5
   };
 
+  const dropStage = () => { st.stage?.abort(); st.stage = null; };
+  // يبدأ رفع الأصل في الخلفية لحظة اختياره، فيكون جاهزاً عند الضغط على «نشر»
+  const startStage = (file) => {
+    dropStage();
+    if (remixType || !api.serverEdits || typeof api.stageVideo !== 'function' || file.size > SERVER_EDIT_MAX_MB * 1048576) return;
+    const s = { p: 0, id: null, err: null };
+    const job = api.stageVideo(file, (p) => { s.p = p; });
+    s.abort = job.abort;
+    s.promise = job.promise.then((id) => { s.id = id; return id; }, (e) => { s.err = e; throw e; });
+    s.promise.catch(() => {});
+    st.stage = s;
+  };
   const cleanupMedia = () => {
+    dropStage();
     clearInterval(st.recTimer);
     st.bgEngine?.stop(); st.bgEngine = null;
     try { st.rec?.state !== 'inactive' && st.rec.stop(); } catch {}
@@ -67,9 +80,13 @@ export async function render(el, params, ctx) {
     return Number.isFinite(v.duration) && v.duration > 0 ? v.duration : hint;
   }
   const vDur = (v) => (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : st.dur || st.end);
+  // تعديلات على الخادم: مقطع عادي (ليس ديويتو/ستيتش)، والخادم يدعمها، والملف ليس ضخماً (وإلا الرفع أبطأ من التصدير)
+  const SERVER_EDIT_MAX_MB = 80;
+  const serverPath = () => !remixType && !!st.file && !!api.serverEdits && st.file.size <= SERVER_EDIT_MAX_MB * 1048576 && !((st.dur || 0) > (api.maxVideoSec || 180) + 0.4);
   const useFile = async (file, { durHint = 0 } = {}) => {
     cleanupMedia();
-    st.file = file; st.url = URL.createObjectURL(file); st.exported = null;
+    st.file = file; st.url = URL.createObjectURL(file); st.exported = null; st.edit = null; st.overlay = null;
+    startStage(file);
     const v = document.createElement('video'); v.preload = 'auto'; v.src = st.url;
     try { await new Promise((ok, no) => { v.onloadedmetadata = () => (v.videoWidth > 0 ? ok() : no(new Error('noPicture'))); v.onerror = () => no(new Error('badFile')); setTimeout(() => no(new Error('badFile')), 8000); }); }
     catch {
@@ -304,7 +321,7 @@ export async function render(el, params, ctx) {
         </section>` : ''}
         <button class="btn ghost block" id="setCover">${esc(t('setCover'))}</button>
         <button class="btn primary block lg" id="goExport">${esc(t('exportNext'))}</button>
-        <p class="muted sm">${esc(t('exportHint'))}</p>
+        <p class="muted sm">${esc(t(serverPath() ? 'exportHintServer' : 'exportHint'))}</p>
       </div>`;
       const v = $('video', el);
       const applyLook = () => { v.style.filter = FILTERS[st.filter]?.css || 'none'; v.playbackRate = st.speed; renderTexts(); };
@@ -341,10 +358,21 @@ export async function render(el, params, ctx) {
       if (srcVid) srcVid.play().catch(() => {});
       $('#setCover', el).addEventListener('click', async () => { st.cover = v.currentTime || st.start; try { st.poster = await captureFrame(v, st.cover, { filter: st.filter, texts: st.texts }); toast(t('coverSet'), 'ok'); } catch { toast(t('coverFail'), 'warn'); } });
       $('#goExport', el).addEventListener('click', async () => {
-        const btn = $('#goExport', el); btn.disabled = true; btn.textContent = t('exporting');
+        const btn = $('#goExport', el); btn.disabled = true; btn.textContent = serverPath() ? t('preparing') : t('exporting');
         try {
-          if (!st.poster) try { st.poster = await captureFrame(v, st.cover || (st.start + st.end) / 2, { filter: st.filter, texts: st.texts }); } catch {}
-          const onP = (p) => { btn.textContent = `${t('exporting')} ${Math.round(p * 100)}٪`; };
+          if (!st.poster) st.poster = await within(captureFrame(v, st.cover || (st.start + st.end) / 2, { filter: st.filter, texts: st.texts }).catch(() => null), 4000, null);
+          // المسار السريع: لا إعادة ترميز في المتصفح. يُرفع الأصل + وصف التعديل، والخادم يطبّقه بـ ffmpeg في الخلفية
+          if (serverPath()) {
+            const spec = { start: st.start, end: st.end, dur: st.dur || vDur(v), speed: st.speed, filter: st.filter, texts: st.texts, soundId: sound?.id || null, volOrig: st.volOrig, volSound: st.volSound };
+            st.exported = null; st.overlay = null; st.edit = null;
+            if (hasEdits(spec)) {
+              st.edit = { start: +st.start.toFixed(3), end: +st.end.toFixed(3), speed: st.speed, filter: st.filter, volOrig: st.volOrig, volSound: sound ? st.volSound : 0 };
+              st.overlay = await renderOverlay(st.texts, v.videoWidth, v.videoHeight);
+              if (st.texts.some((x) => x.text) && !st.overlay) throw new Error('overlay');
+            }
+            st.step = 'publish'; await draw(); return;
+          }
+          const onP = (p) => { btn.textContent = `${t('exporting')} ${Math.min(99, Math.round(p * 100))}٪`; };
           const out = remixType === 'duet' && remixSrc
             ? await exportDuet({ sourceUrl: remixSrc.src, userUrl: st.url, layout: st.layout, sourceSide: st.sourceSide, userStart: st.start, userEnd: st.end, speed: st.speed, filter: st.filter, texts: st.texts, coverTime: st.cover, volSource: st.volSource, volUser: st.volMe }, onP)
             : remixType === 'stitch' && remixSrc
@@ -368,7 +396,7 @@ export async function render(el, params, ctx) {
     // publish
     const file = st.exported ? blobToFile(st.exported.blob, st.exported.mime) : st.file;
     el.innerHTML = `<div class="page studio">${pageHead(t('publish'))}
-      <div class="pub-prev">${st.poster ? `<img src="${st.poster}" alt="">` : ''}<p class="muted sm">${esc(t('exportHint'))}</p></div>
+      <div class="pub-prev">${st.poster ? `<img src="${st.poster}" alt="">` : ''}<p class="muted sm">${esc(t(st.exported ? 'exportHint' : 'exportHintServer'))}</p></div>
       <form class="upload-form" id="pub">
         <label class="field"><span>${esc(t('caption'))}</span><textarea name="caption" rows="3" maxlength="300" placeholder="${esc(t('captionPh'))}"></textarea></label>
         <label class="field"><span>${esc(t('hashtags'))}</span><input name="hashtags" placeholder="${esc(t('hashtagsPh'))}"></label>
@@ -384,9 +412,9 @@ export async function render(el, params, ctx) {
             : `<p class="muted sm">${esc(store && !active ? t('storeInactive') : t('noStoreForTag'))} <a href="${store ? '#/dashboard' : '#/rent'}">${esc(store ? t('dashboard') : t('rentNow'))}</a></p>`}
         </fieldset>
         <button class="btn primary block lg" type="submit">${esc(t('publish'))}</button>
-        ${st.exported ? `<button class="btn ghost block" type="button" id="backEdit">${esc(t('backEdit'))}</button>` : ''}
+        ${st.exported || (st.file && st.dur) ? `<button class="btn ghost block" type="button" id="backEdit">${esc(t('backEdit'))}</button>` : ''}
       </form></div>`;
-    $('#backEdit', el)?.addEventListener('click', async () => { st.step = 'edit'; st.exported = null; await draw(); });
+    $('#backEdit', el)?.addEventListener('click', async () => { st.step = 'edit'; st.exported = null; st.edit = null; st.overlay = null; await draw(); });
     el.querySelectorAll('input[name=when]').forEach((r) => r.addEventListener('change', () => { $('#schedWrap', el).hidden = el.querySelector('input[name=when]:checked')?.value !== 'schedule'; }));
     $('#pub', el).addEventListener('submit', async (e) => {
       e.preventDefault(); if (!file) { toast(t('pickFirst'), 'warn'); return; }
@@ -397,12 +425,27 @@ export async function render(el, params, ctx) {
         const payload = {
           file, poster: st.poster, caption: fd.get('caption'), hashtags: String(fd.get('hashtags') || '').split(/[\s,،]+/).filter(Boolean),
           sound: sound?.title || null, soundId: sound?.id || null, saveSound: !sound && fd.get('saveSound') === '1',
-          productIds: $$('input[name=products]:checked', el).map((i) => i.value)
+          productIds: $$('input[name=products]:checked', el).map((i) => i.value),
+          // مراحل حقيقية: رفع ٪ ثم معالجة على الخادم — لا يبدو عالقاً
+          onProgress: ({ stage, p }) => { btn.textContent = stage === 'upload' ? t('uploadingPct', { n: Math.min(99, Math.round((p || 0) * 100)) }) : t('serverProcessing'); }
         };
+        if (!st.exported && st.edit) { payload.edit = st.edit; if (st.overlay) payload.overlay = st.overlay; }
+        // الأصل رُفع مسبقاً في الخلفية؟ ننتظر ما تبقّى منه (مع نسبة حقيقية) ثم ننشر بمعرّفه بلا رفع ثانٍ
+        const stg = !st.exported && file === st.file ? st.stage : null;
+        if (stg) {
+          const tick = setInterval(() => { if (!stg.id && !stg.err) btn.textContent = t('uploadingPct', { n: Math.min(99, Math.round(stg.p * 100)) }); }, 200);
+          try { payload.stageId = await stg.promise; btn.textContent = t('serverProcessing'); } catch { payload.stageId = null; } finally { clearInterval(tick); }
+        }
         if (remixType && remixSrc) { payload.sourceClipId = remixSrc.id; payload.remixType = remixType; }
         if (when === 'draft') payload.status = 'draft';
         if (when === 'schedule') { payload.status = 'scheduled'; payload.scheduledAt = new Date(fd.get('scheduledAt')).toISOString(); if (!fd.get('scheduledAt') || Number.isNaN(+new Date(fd.get('scheduledAt')))) { toast(t('scheduleNeed'), 'warn'); btn.disabled = false; btn.textContent = t('publish'); return; } }
-        const v = await api.createVideo(payload);
+        let v;
+        try { v = await api.createVideo(payload); }
+        catch (err) {
+          if (!payload.stageId || err?.message !== 'staleUpload') throw err;
+          dropStage(); payload.stageId = null; v = await api.createVideo(payload);   // انتهت صلاحية الرفع المسبق: نرفع الملف مباشرة
+        }
+        if (payload.stageId) st.stage = null;
         toast(when === 'draft' ? t('draftSaved') : when === 'schedule' ? t('scheduledOk') : v.mediaStatus === 'processing' ? t('publishedProcessing') : t('published'), 'ok'); cleanupMedia(); ctx.navigate(when === 'now' ? '#/watch/' + v.id : '#/drafts');
       } catch (err) {
         console.warn(err); toast(uploadErrorText(err), 'warn');

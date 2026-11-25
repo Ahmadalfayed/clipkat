@@ -6,7 +6,7 @@ import multer from 'multer';
 import { config } from './config.js';
 import { HttpError } from './util.js';
 
-export const dirs = { tmp: path.join(config.uploadDir, '_tmp'), videos: path.join(config.uploadDir, 'videos'), images: path.join(config.uploadDir, 'images'), sounds: path.join(config.uploadDir, 'sounds'), dlcache: path.join(config.uploadDir, '.dlcache') };
+export const dirs = { tmp: path.join(config.uploadDir, '_tmp'), videos: path.join(config.uploadDir, 'videos'), images: path.join(config.uploadDir, 'images'), sounds: path.join(config.uploadDir, 'sounds'), dlcache: path.join(config.uploadDir, '.dlcache'), stage: path.join(config.uploadDir, '.stage') };
 export function ensureDirs() { for (const d of Object.values(dirs)) fs.mkdirSync(d, { recursive: true }); }
 
 const storage = multer.diskStorage({ destination: (_r, _f, cb) => cb(null, dirs.tmp), filename: (_r, _f, cb) => cb(null, crypto.randomBytes(16).toString('hex')) });
@@ -17,9 +17,30 @@ const wrap = (mw) => (req, res, next) => mw(req, res, (err) => {
 });
 export const imageUpload = wrap((req, res, next) => { req._limitMb = config.maxImageMb; multer({ storage, limits: { fileSize: config.maxImageMb * 1048576, files: 1, fields: 4 } }).single('file')(req, res, next); });
 export const audioUpload = wrap((req, res, next) => { req._limitMb = config.maxSoundMb; multer({ storage, limits: { fileSize: config.maxSoundMb * 1048576, files: 1, fields: 6 } }).single('file')(req, res, next); });
+// رفع مسبق: يبدأ المتصفح رفع الأصل لحظة اختياره (أثناء التعديل وكتابة الوصف)، ثم يُنشر بمعرّفه فوراً
+export const videoStageUpload = wrap((req, res, next) => { req._limitMb = config.maxVideoMb; multer({ storage, limits: { fileSize: config.maxVideoMb * 1048576, files: 1, fields: 2 } }).single('file')(req, res, next); });
+const STAGE_TOKEN = /^[a-f0-9]{32}$/;
+export function stageFile(tmpFile, uid, ext) {
+  fs.mkdirSync(dirs.stage, { recursive: true });
+  const token = crypto.randomBytes(16).toString('hex');
+  fs.renameSync(tmpFile, path.join(dirs.stage, `${uid}-${token}.${ext}`));
+  return token;
+}
+// يُرجع مسار الملف المرحلي لهذا المستخدم فقط (أو null)
+export function stagedPath(uid, token) {
+  if (!STAGE_TOKEN.test(String(token || '')) || !UUIDISH.test(String(uid))) return null;
+  for (const ext of ['mp4', 'mov', 'webm']) { const f = path.join(dirs.stage, `${uid}-${token}.${ext}`); if (fs.existsSync(f)) return f; }
+  return null;
+}
+// حذف الملفات المرحلية التي لم تُنشر (تُركت) بعد مدة
+export function sweepStaged(maxAgeMs = 6 * 3600000) {
+  let n = 0;
+  try { for (const f of fs.readdirSync(dirs.stage)) { const p = path.join(dirs.stage, f); try { if (Date.now() - fs.statSync(p).mtimeMs > maxAgeMs) { rm(p); n++; } } catch {} } } catch {}
+  return n;
+}
 export const videoUpload = wrap((req, res, next) => {
   req._limitMb = config.maxVideoMb;
-  multer({ storage, limits: { fileSize: config.maxVideoMb * 1048576, files: 2, fields: 16 } }).fields([{ name: 'file', maxCount: 1 }, { name: 'poster', maxCount: 1 }])(req, res, next);
+  multer({ storage, limits: { fileSize: config.maxVideoMb * 1048576, files: 3, fields: 20 } }).fields([{ name: 'file', maxCount: 1 }, { name: 'poster', maxCount: 1 }, { name: 'overlay', maxCount: 1 }])(req, res, next);
 });
 
 // التحقق من نوع الملف الحقيقي (من أول بايتات) — لا نثق باسم الملف ولا بـ Content-Type
@@ -55,7 +76,7 @@ export function removeVideoFiles(v) {
   if (UUIDISH.test(String(v.id)) && UUIDISH.test(String(v.user_id))) {
     const scan = (dir, match) => { try { for (const f of fs.readdirSync(dir)) if (match(f)) kill(path.join(dir, f)); } catch {} };
     scan(path.join(dirs.videos, v.user_id), (f) => f.startsWith(`${v.id}.`) || f.startsWith(`.${v.id}.`));
-    scan(path.join(dirs.images, v.user_id), (f) => f.startsWith(`poster-${v.id}.`) || f.startsWith(`poster-${v.id}-`));
+    scan(path.join(dirs.images, v.user_id), (f) => f.startsWith(`poster-${v.id}.`) || f.startsWith(`poster-${v.id}-`) || f === `overlay-${v.id}.png`);
     scan(dirs.dlcache, (f) => f.startsWith(`${v.id}-`) || f.startsWith(`.${v.id}-`));   // نسخ التنزيل بالشعار
   }
   return removed;

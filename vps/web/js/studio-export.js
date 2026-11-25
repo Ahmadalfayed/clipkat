@@ -37,7 +37,27 @@ export function finishBlob(chunks, rec) {
 }
 
 function wait(el, ev) { return new Promise((ok) => el.addEventListener(ev, ok, { once: true })); }
-async function seek(el, t) { el.currentTime = Math.max(0, t); if (Math.abs((el.currentTime || 0) - t) > 0.05) await wait(el, 'seeked'); }
+// مهلة لأي وعد قد لا يُحل أبداً على iOS (seeked / onstop / AudioContext.close)
+export const within = (p, ms, fallback) => Promise.race([p, new Promise((ok) => setTimeout(() => ok(fallback), ms))]);
+async function seek(el, t) { el.currentTime = Math.max(0, t); if (Math.abs((el.currentTime || 0) - t) > 0.05) await within(wait(el, 'seeked'), 4000); }
+
+// هل تحتاج التعديلات إلى معالجة؟ (لا شيء = يُرفع الأصل كما هو)
+export function hasEdits({ start = 0, end = 0, dur = 0, speed = 1, filter = 'none', texts = [], soundId = null, volOrig = 1, volSound = 0 } = {}) {
+  const trimmed = start > 0.05 || (dur > 0 && end > 0 && end < dur - 0.05);
+  return trimmed || speed !== 1 || (filter && filter !== 'none') || (texts || []).some((x) => x.text) || volOrig < 0.999 || (!!soundId && volSound > 0);
+}
+
+// طبقة النصوص كصورة PNG شفافة بنفس رسم المعاينة — يدمجها الخادم فوق الفيديو (يدعم العربية تماماً كما يراها المستخدم)
+export async function renderOverlay(texts, vw, vh) {
+  if (!(texts || []).some((x) => x.text)) return null;
+  const w = Math.min(720, vw || 720) & ~1 || 720;
+  const h = (Math.round(w * ((vh || 1280) / (vw || 720)) / 2) * 2) || 1280;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  try { await within(document.fonts?.ready || Promise.resolve(), 1500); } catch {}
+  paintTexts(ctx, w, h, texts);
+  return await within(new Promise((ok) => c.toBlob((b) => ok(b), 'image/png')), 4000, null);
+}
 
 export async function captureFrame(video, time, { filter = 'none', texts = [] } = {}) {
   await seek(video, time);
@@ -128,7 +148,7 @@ export async function exportClip(opts, onProgress = () => {}) {
     const draw = () => {
       if (!running) return;
       paint(ctx, video, w, h, filter, texts);
-      onProgress(Math.min(1, Math.max(0, (video.currentTime - t0) / (t1 - t0))));
+      onProgress(Math.min(0.99, Math.max(0, (video.currentTime - t0) / (t1 - t0))));
       if (video.currentTime >= t1 - 0.04 || video.ended) { running = false; try { rec.stop(); } catch {} return; }
       if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(draw);
       else requestAnimationFrame(draw);
@@ -137,20 +157,22 @@ export async function exportClip(opts, onProgress = () => {}) {
     await Promise.all([video.play(), vAud.play().catch(() => {}), aEl?.play().catch(() => {})]);
     const started = performance.now();
     draw();
-    const killer = setTimeout(() => { if (rec.state !== 'inactive') rec.stop(); }, wall * 1000 + 1500);
-    await stopped; clearTimeout(killer);
+    const killer = setTimeout(() => { if (rec.state !== 'inactive') try { rec.stop(); } catch {} }, wall * 1000 + 1500);
+    // على iOS قد لا يُطلق onstop أبداً بعد stop() — كان هذا يعلّق الزر على «100٪». نكتفي بالأجزاء المسجّلة بعد مهلة
+    await Promise.race([stopped, new Promise((ok) => setTimeout(ok, wall * 1000 + 4500))]); clearTimeout(killer);
     running = false;
     video.pause(); vAud.pause(); aEl?.pause();
+    if (rec.state !== 'inactive') try { rec.stop(); } catch {}
     const blob = finishBlob(chunks, rec);
     if (!blob.size) throw new Error('empty');
     const posterAt = Math.min(t1, Math.max(t0, coverTime ?? (t0 + (t1 - t0) / 2)));
-    const poster = await captureFrame(video, posterAt, { filter, texts });
+    const poster = await within(captureFrame(video, posterAt, { filter, texts }).catch(() => null), 4000, null);
+    await within(stopAudio(), 1500);
     onProgress(1);
-    await stopAudio();
     video.removeAttribute('src'); video.load(); vAud.removeAttribute('src'); vAud.load();
     return { blob, mime: blob.type, poster, duration: wall };
   } catch (e) {
-    await stopAudio(); throw e;
+    await within(stopAudio(), 1500); throw e;
   }
 }
 
@@ -236,21 +258,21 @@ async function recordCanvas(canvas, audioEls, durationSec, onFrame, onProgress) 
       if (!running) return;
       const t = (performance.now() - started) / 1000;
       onFrame(t);
-      onProgress(Math.min(1, t / durationSec));
+      onProgress(Math.min(0.99, t / durationSec));
       if (t >= durationSec - 0.04) { running = false; try { rec.stop(); } catch {} return; }
       requestAnimationFrame(draw);
     };
     rec.start(200);
     draw();
-    const killer = setTimeout(() => { if (rec.state !== 'inactive') rec.stop(); }, durationSec * 1000 + 1500);
-    await stopped; clearTimeout(killer);
+    const killer = setTimeout(() => { if (rec.state !== 'inactive') try { rec.stop(); } catch {} }, durationSec * 1000 + 1500);
+    await Promise.race([stopped, new Promise((ok) => setTimeout(ok, durationSec * 1000 + 4500))]); clearTimeout(killer);
     running = false;
     const blob = finishBlob(chunks, rec);
     if (!blob.size) throw new Error('empty');
-    await stopAudio();
+    await within(stopAudio(), 1500);
     return { blob, mime: blob.type, duration: durationSec };
   } catch (e) {
-    await stopAudio(); throw e;
+    await within(stopAudio(), 1500); throw e;
   }
 }
 

@@ -218,3 +218,104 @@ test('iPhone Safari MediaRecorder file (fragmented MP4, H.264/AAC, .mp4) is acce
   const v = probeJson(onDisk(done.src)).streams.find((s) => s.codec_type === 'video');
   assert.equal(v.codec_name, 'h264');
 });
+
+// ---------- المسار السريع: تعديلات الاستوديو تُطبَّق على الخادم (لا إعادة ترميز في المتصفح) ----------
+function makeClip(name, { size = '540x960', seconds = 6 } = {}) {
+  const out = path.join(fx, name); fs.mkdirSync(fx, { recursive: true });
+  ff(['-f', 'lavfi', '-i', `testsrc2=size=${size}:rate=30`, '-f', 'lavfi', '-i', 'sine=frequency=440', '-t', String(seconds), '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', '-movflags', '+faststart', out]);
+  return out;
+}
+function makeOverlay(name = 'ov.png') {
+  const out = path.join(fx, name); fs.mkdirSync(fx, { recursive: true });
+  // شفاف بالكامل عدا شريط أبيض معتم (مثل نص الاستوديو)
+  ff(['-f', 'lavfi', '-i', "color=c=black:s=540x960,format=rgba,geq=r=255:g=255:b=255:a='if(between(Y\\,700\\,780)*between(X\\,40\\,500)\\,255\\,0)'", '-frames:v', '1', out]);
+  return out;
+}
+
+test('normalizeEdit(): no real edit → null (original published as is); bad values are clamped', async () => {
+  const { normalizeEdit, editedDuration, editDims } = await import('../src/transcode.js');
+  assert.equal(normalizeEdit({ start: 0, end: 6, speed: 1, filter: 'none', volOrig: 1 }, 6), null);
+  assert.equal(normalizeEdit('not json', 6), null);
+  const e = normalizeEdit({ start: -3, end: 99, speed: 7, filter: '"; rm -rf', volOrig: 5 }, 6, { overlay: true });
+  assert.deepEqual([e.start, e.end, e.speed, e.filter, e.volOrig], [0, 6, 1, 'none', 1], 'clamped; overlay alone is an edit');
+  const t = normalizeEdit({ start: 1, end: 5, speed: 2, filter: 'warm' }, 6);
+  assert.equal(editedDuration(t), 2);
+  assert.equal(normalizeEdit({ volSound: 1 }, 6, { sound: false }), null, 'sound volume ignored without a real sound');
+  assert.deepEqual(editDims({ video: { width: 1920, height: 1080, rotation: -90 } }), { w: 720, h: 1280 }, 'rotated iPhone clip → 720p portrait');
+});
+
+test('fast path: original + edit spec + text overlay → published at once as processing, then trimmed/sped/filtered 720p H.264 MP4', async () => {
+  const u = await user('txfast' + crypto.randomBytes(2).toString('hex'));
+  const clip = makeClip('fast.mp4', { size: '1080x1920', seconds: 6 });
+  const t0 = Date.now();
+  const r = await upload(u, clip, { edit: JSON.stringify({ start: 1, end: 5, speed: 2, filter: 'warm', volOrig: 1 }), overlay: new Blob([fs.readFileSync(makeOverlay())], { type: 'image/png' }) });
+  const uploadMs = Date.now() - t0;
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.mediaStatus, 'processing', 'edited clip is processed in the background');
+  assert.ok(uploadMs < 5000, `upload returns quickly without waiting for ffmpeg (${uploadMs} ms)`);
+  const cl = new pg.Client({ connectionString: DB }); await cl.connect();
+  try {
+  const row = (await cl.query('select edit_spec from videos where id = $1', [r.body.id])).rows[0];
+  assert.equal(row.edit_spec.filter, 'warm'); assert.match(row.edit_spec.overlay, /overlay-.*\.png$/);
+  const ovPath = onDisk(row.edit_spec.overlay); assert.ok(fs.existsSync(ovPath));
+  const done = await waitStatus(u, r.body.id);
+  assert.equal(done.mediaStatus, 'ready');
+  const j = probeJson(onDisk(done.src));
+  const v = j.streams.find((s) => s.codec_type === 'video'), a = j.streams.find((s) => s.codec_type === 'audio');
+  assert.equal(v.codec_name, 'h264'); assert.equal(v.width, 720); assert.equal(v.height, 1280);
+  assert.equal(a.codec_name, 'aac');
+  assert.ok(Math.abs(Number(j.format.duration) - 2) < 0.25, 'trim 1→5 s at 2× = 2 s, got ' + j.format.duration);
+  const { moovFirst } = await import('../src/transcode.js');
+  assert.ok(moovFirst(onDisk(done.src)), 'faststart');
+  assert.ok(!fs.existsSync(ovPath), 'overlay removed after processing');
+  assert.equal((await cl.query('select edit_spec from videos where id = $1', [r.body.id])).rows[0].edit_spec, null);
+  // الطبقة دُمجت فعلاً: البكسل في منطقة النص أبيض تقريباً
+  const px = execFileSync('ffmpeg', ['-v', 'error', '-ss', '0.5', '-i', onDisk(done.src), '-vf', 'crop=2:2:360:1000,format=gray', '-frames:v', '1', '-f', 'rawvideo', '-']);
+  assert.ok(px[0] > 200, 'text overlay burned in (luma ' + px[0] + ')');
+  const clean = execFileSync('ffmpeg', ['-v', 'error', '-ss', '0.5', '-i', onDisk(done.src), '-vf', 'crop=2:2:360:200,format=gray', '-frames:v', '1', '-f', 'rawvideo', '-']);
+  assert.ok(clean[0] < 250 || clean[0] !== px[0], 'transparent part of the overlay leaves the picture visible');
+  } finally { await cl.end(); }
+});
+
+test('fast path: unedited clip with a no-op edit spec is published as is (no re-encode)', async () => {
+  const u = await user('txnoop' + crypto.randomBytes(2).toString('hex'));
+  const r = await upload(u, makeClip('noop.mp4'), { edit: JSON.stringify({ start: 0, end: 6, speed: 1, filter: 'none', volOrig: 1 }) });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.mediaStatus, 'ready');
+});
+
+test('fast path: library sound is mixed on the server; edited length is what counts for the limit', async () => {
+  const u = await user('txsnd' + crypto.randomBytes(2).toString('hex'));
+  const s = await uploadSound(u, wav('mix.wav', 3)); assert.equal(s.status, 201, JSON.stringify(s.body));
+  const r = await upload(u, makeClip('snd.mp4'), { soundId: s.body.id, edit: JSON.stringify({ start: 0, end: 6, speed: 1, filter: 'gray', volOrig: 0.2, volSound: 1 }) });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const done = await waitStatus(u, r.body.id);
+  assert.equal(done.mediaStatus, 'ready');
+  const j = probeJson(onDisk(done.src));
+  assert.ok(j.streams.some((x) => x.codec_type === 'audio'));
+  assert.ok(Math.abs(Number(j.format.duration) - 6) < 0.25, 'full length kept, sound loops: ' + j.format.duration);
+});
+
+test('pre-upload (stage): original uploaded while editing, then published by stageId only; another user cannot use it', async () => {
+  const u = await user('txstg' + crypto.randomBytes(2).toString('hex'));
+  const other = await user('txst2' + crypto.randomBytes(2).toString('hex'));
+  const fd = new FormData(); fd.append('file', new Blob([fs.readFileSync(makeClip('stage.mp4'))]), 'stage.mp4');
+  const s = await u.req('POST', '/videos/stage', undefined, { form: fd });
+  assert.equal(s.status, 201, JSON.stringify(s.body)); assert.match(s.body.stageId, /^[a-f0-9]{32}$/);
+  const staged = fs.readdirSync(path.join(upl, '.stage')); assert.equal(staged.length, 1);
+  // ليس في مسار يُخدَم للعامة
+  const pub = await fetch(`http://127.0.0.1:${PORT}/uploads/.stage/${staged[0]}`); assert.notEqual(pub.status, 200);
+  const steal = new FormData(); steal.append('stageId', s.body.stageId); steal.append('caption', 'x');
+  assert.equal((await other.req('POST', '/videos', undefined, { form: steal })).status, 400);
+  const pf = new FormData(); pf.append('stageId', s.body.stageId); pf.append('caption', 'staged'); pf.append('edit', JSON.stringify({ start: 0, end: 3, speed: 1, filter: 'cool' }));
+  const t0 = Date.now(); const r = await u.req('POST', '/videos', undefined, { form: pf }); const ms = Date.now() - t0;
+  assert.equal(r.status, 201, JSON.stringify(r.body)); assert.equal(r.body.mediaStatus, 'processing');
+  assert.ok(ms < 3000, 'publish by stageId is instant: ' + ms + ' ms');
+  assert.equal(fs.readdirSync(path.join(upl, '.stage')).length, 0, 'staged file consumed');
+  const again = await u.req('POST', '/videos', undefined, { form: (() => { const f = new FormData(); f.append('stageId', s.body.stageId); return f; })() });
+  assert.equal(again.status, 400); assert.equal(again.body.error, 'staleUpload');
+  const done = await waitStatus(u, r.body.id); assert.equal(done.mediaStatus, 'ready');
+  const j = probeJson(onDisk(done.src)); assert.ok(Math.abs(Number(j.format.duration) - 3) < 0.25);
+  const { sweepStaged } = await import('../src/uploads.js');
+  assert.equal(typeof sweepStaged, 'function');
+});
