@@ -26,7 +26,12 @@ h1, h2, h3 { line-height: 1.3; margin: 0; }
 .rot-up { transform: rotate(90deg); } .rot-down { transform: rotate(-90deg); }
 
 /* ===== الهيكل ===== */
-#app { position: relative; max-width: var(--app-w); margin: 0 auto; min-height: 100dvh; background: var(--bg); }
+/* هيكل التطبيق: المستند نفسه لا يتمرّر أبداً — #view هو حاوية التمرير.
+   على iOS 26 (Safari والتطبيق المثبّت) تمرير المستند مع تصغير شريط العنوان يجعل العناصر الثابتة (position: fixed; bottom: 0)
+   تُرسم في منتصف الشاشة وتتحرك مع الصفحة. بإبقاء المستند ثابتاً يبقى الشريط والزر العائم والتنبيه مثبّتين في الأسفل. */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+#app { position: relative; max-width: var(--app-w); margin: 0 auto; height: 100%; height: 100dvh; overflow: hidden; background: var(--bg); }
+#view { height: 100%; box-sizing: border-box; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
 @media (min-width: 700px) { #app { box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(0,0,0,.25); } }
 @media (min-width: 1024px) { #app:not(.immersive) { --app-w: 820px; } }
 #view { padding-bottom: calc(var(--nav-h) + 24px + var(--notice-gap) + env(safe-area-inset-bottom)); outline: none; }
@@ -390,7 +395,7 @@ h1, h2, h3 { line-height: 1.3; margin: 0; }
 .two > * { min-width: 0; }
 .field input[type=file] { width: 100%; padding: 8px; border: 1px dashed var(--line); border-radius: 12px; background: var(--surface2); }
 .field input[type=file]::file-selector-button { font: inherit; font-weight: 700; border: 0; border-radius: 8px; padding: 5px 10px; margin-inline-end: 8px; background: var(--grad); color: var(--primary-ink); cursor: pointer; }
-html, body { overflow-x: clip; }
+html, body { overflow-x: clip; overflow-y: hidden; }
 .plan li.no { text-decoration: none; opacity: .55; }
 @media (max-width: 599px) { .sp-head > .btn { order: 3; flex-basis: 100%; } .sp-head h1 { font-size: 19px; } }
 .sp-head .grow { padding-bottom: 4px; }

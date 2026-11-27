@@ -79,7 +79,7 @@ async function route() {
   const loader = routes[name];
   if (cleanup) { try { cleanup(); } catch (e) { console.warn(e); } cleanup = null; }
   const app = $('#app'); app.classList.toggle('immersive', IMMERSIVE.has(name));
-  const view = $('#view'); view.innerHTML = '<div class="loading" aria-busy="true"><span class="spinner"></span></div>'; view.scrollTop = 0; window.scrollTo(0, 0);
+  const view = $('#view'); view.innerHTML = '<div class="loading" aria-busy="true"><span class="spinner"></span></div>'; view.scrollTop = 0; window.scrollTo(0, 0);   // #view هو حاوية التمرير
   ctx.me = await api.currentUser();
   await renderNav(); renderDemoNotice();
   initRealtime(ctx).catch((e) => console.warn('[rtc]', e));

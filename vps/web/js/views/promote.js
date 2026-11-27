@@ -176,9 +176,9 @@ async function wizard(el, params, ctx) {
     if (e.target.id === 'prCtyQ') { const r = $('#prCtyRes', el); if (r) r.innerHTML = ctyRes(e.target.value.trim()); return; }
     if (e.target.id === 'prDays') { s.days = +e.target.value; redrawBudget(); }
   });
-  $('#prPrev', el).onclick = () => { if (s.step) { s.step--; draw(); window.scrollTo(0, 0); } };
+  $('#prPrev', el).onclick = () => { if (s.step) { s.step--; draw(); document.getElementById('view')?.scrollTo(0, 0); } };
   $('#prNext', el).onclick = async (ev) => {
-    if (s.step < 3) { s.step++; draw(); window.scrollTo(0, 0); return; }
+    if (s.step < 3) { s.step++; draw(); document.getElementById('view')?.scrollTo(0, 0); return; }
     const btn = ev.currentTarget; btn.disabled = true;
     const payload = { videoId: v.id, objective: s.objective, audience: s.audience, budgetType: s.budgetType, days: s.days, dailyCoins: s.daily, totalCoins: s.total };
     if (s.audience === 'manual') Object.assign(payload, { countries: s.countries, governorates: s.governorates, ageBrackets: s.ages, gender: s.gender, interests: s.interests });
